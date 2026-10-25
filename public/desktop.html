@@ -103,6 +103,8 @@
 
       <!-- Quick Slash Command Chips -->
       <div class="quick-commands-bar" id="quick-commands">
+        <button class="slash-chip" data-cmd="/resume">🔄 /resume</button>
+        <button class="slash-chip" data-cmd="/new">✨ /new</button>
         <button class="slash-chip" data-cmd="/usage">⚡ /usage</button>
         <button class="slash-chip" data-cmd="/help">📖 /help</button>
         <button class="slash-chip" data-cmd="/plan ">📋 /plan</button>
@@ -119,9 +121,18 @@
         <button class="slash-chip" data-cmd="git status">🐙 Git</button>
       </div>
 
+      <!-- Command Autocomplete Popup (Antigravity Slash Menu) -->
+      <div class="slash-autocomplete hidden" id="slash-autocomplete">
+        <div class="slash-header">
+          <span><i class="fa-solid fa-terminal"></i> Perintah Antigravity</span>
+          <span class="slash-hint">↑↓ pilih • Enter konfirmasi</span>
+        </div>
+        <div class="slash-list" id="slash-list"></div>
+      </div>
+
       <!-- Input Bar Area -->
       <div class="session-input-wrapper">
-        <input type="text" id="session-input" placeholder="Perintah bash, /slash, atau chat..." autocomplete="off">
+        <input type="text" id="session-input" placeholder="Tanya Agent, ketik / untuk perintah..." autocomplete="off">
         <button id="btn-session-send" title="Kirim"><i class="fa-solid fa-paper-plane"></i></button>
       </div>
     </div>

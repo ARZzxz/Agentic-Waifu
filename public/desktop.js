@@ -48,6 +48,9 @@ const btnClearSession = document.getElementById('btn-clear-session');
 const btnDodge = document.getElementById('btn-dodge');
 const btnMinimizePanel = document.getElementById('btn-minimize-panel');
 
+const slashAutocomplete = document.getElementById('slash-autocomplete');
+const slashList = document.getElementById('slash-list');
+
 // Emotion configurations
 const EMOTIONS = {
   goda: { label: 'Ara ara~', icon: 'fa-heart-circle-bolt', motion: 'Tap' },
@@ -57,6 +60,33 @@ const EMOTIONS = {
   khawatir: { label: 'Khawatir', icon: 'fa-hand-holding-heart', motion: 'Idle' },
   berpikir: { label: 'Berpikir...', icon: 'fa-brain', motion: 'Idle' }
 };
+
+// Slash Commands Definition for Antigravity Autocomplete Menu
+const SLASH_COMMANDS = [
+  { cmd: '/resume', icon: '🔄', desc: 'Resume & masuk ke sesi percakapan terakhir', takesArg: false },
+  { cmd: '/new', icon: '✨', desc: 'Mulai sesi percakapan & tugas baru', takesArg: false },
+  { cmd: '/usage', icon: '⚡', desc: 'Cek sisa kuota model AI (Gemini & Claude)', takesArg: false },
+  { cmd: '/help', icon: '📖', desc: 'Lihat daftar lengkap perintah & bantuan', takesArg: false },
+  { cmd: '/plan', icon: '📋', desc: 'Buat rencana langkah terstruktur sebelum eksekusi', takesArg: true },
+  { cmd: '/goal', icon: '🎯', desc: 'Jalankan tugas mendalam tanpa henti (autonomous mode)', takesArg: true },
+  { cmd: '/browser', icon: '🌐', desc: 'Berselancar dan cari informasi di web', takesArg: true },
+  { cmd: '/teamwork', icon: '🤝', desc: 'Jalankan kolaborasi tim multi-agent', takesArg: true },
+  { cmd: '/boost', icon: '🚀', desc: 'Mode penalaran intensif & verifikasi ketat', takesArg: true },
+  { cmd: '/grill-me', icon: '🔥', desc: 'Tanya jawab kritis menguji asumsi rencana', takesArg: true },
+  { cmd: '/learn', icon: '🧠', desc: 'Simpan instruksi agar kuingat permanen', takesArg: true },
+  { cmd: '/skills', icon: '🛠️', desc: 'Lihat daftar skills yang terpasang', takesArg: false },
+  { cmd: '/agents', icon: '🤖', desc: 'Lihat daftar subagent yang tersedia', takesArg: false },
+  { cmd: '/models', icon: '🔮', desc: 'Lihat model AI Antigravity yang tersedia', takesArg: false },
+  { cmd: '/mcp', icon: '🔌', desc: 'Cek status server MCP', takesArg: false },
+  { cmd: '/changelog', icon: '📦', desc: 'Lihat catatan rilis terbaru Antigravity', takesArg: false },
+  { cmd: '/clear', icon: '🗑️', desc: 'Bersihkan tampilan riwayat sesi di layar', takesArg: false },
+  { cmd: '/sleep', icon: '💤', desc: 'Tidurkan laptop (suspend)', takesArg: false },
+  { cmd: '/restart', icon: '🔄', desc: 'Nyalakan ulang laptop (reboot)', takesArg: false },
+  { cmd: '/shutdown', icon: '⚡', desc: 'Matikan daya laptop (poweroff)', takesArg: false }
+];
+
+let selectedAutocompleteIndex = 0;
+let filteredCommands = [];
 
 // 1. Initialize PixiJS for Slim/Wide Canvas
 async function initPixi() {
@@ -222,6 +252,10 @@ function minimizePanel() {
   layout.classList.add('is-minimized');
   minimizedLabel.textContent = 'Tanya Agent';
 
+  if (slashAutocomplete) {
+    slashAutocomplete.classList.add('hidden');
+  }
+
   // If in wide mode, revert to slim 260px when minimizing so no ghost area blocks desktop
   if (isWideMode) {
     toggleWideMode(false);
@@ -245,12 +279,77 @@ function toggleWideMode(forceState = null) {
   }
 }
 
-// 7. Send Command or Chat Message
+// 7. Slash Autocomplete Menu Methods
+function renderAutocomplete(filterText = '') {
+  const query = filterText.toLowerCase().trim();
+  filteredCommands = SLASH_COMMANDS.filter(c => {
+    return c.cmd.toLowerCase().includes(query) || c.desc.toLowerCase().includes(query);
+  });
+
+  if (filteredCommands.length === 0) {
+    slashAutocomplete.classList.add('hidden');
+    return;
+  }
+
+  selectedAutocompleteIndex = 0;
+  slashList.innerHTML = '';
+
+  filteredCommands.forEach((item, index) => {
+    const el = document.createElement('div');
+    el.className = `slash-item ${index === 0 ? 'selected' : ''}`;
+    el.dataset.index = index;
+    el.innerHTML = `
+      <span class="slash-item-icon">${item.icon}</span>
+      <span class="slash-item-cmd">${item.cmd}</span>
+      <span class="slash-item-desc">${item.desc}</span>
+    `;
+
+    el.addEventListener('mouseenter', () => {
+      setAutocompleteSelected(index);
+    });
+
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      chooseAutocompleteCommand(item);
+    });
+
+    slashList.appendChild(el);
+  });
+
+  slashAutocomplete.classList.remove('hidden');
+}
+
+function setAutocompleteSelected(index) {
+  selectedAutocompleteIndex = index;
+  const items = slashList.querySelectorAll('.slash-item');
+  items.forEach((item, i) => {
+    if (i === index) {
+      item.classList.add('selected');
+      item.scrollIntoView({ block: 'nearest' });
+    } else {
+      item.classList.remove('selected');
+    }
+  });
+}
+
+function chooseAutocompleteCommand(item) {
+  slashAutocomplete.classList.add('hidden');
+  if (item.takesArg) {
+    sessionInput.value = item.cmd + ' ';
+    sessionInput.focus();
+  } else {
+    sessionInput.value = '';
+    sendMessage(item.cmd);
+  }
+}
+
+// 8. Send Command or Chat Message
 async function sendMessage(inputOverride = null) {
   const text = (inputOverride || sessionInput.value).trim();
   if (!text) return;
 
   if (!inputOverride) sessionInput.value = '';
+  slashAutocomplete.classList.add('hidden');
 
   // Append user message
   appendHistoryItem('user', text);
@@ -288,6 +387,12 @@ async function sendMessage(inputOverride = null) {
     bubbleProcess.classList.add('hidden');
 
     if (res.ok) {
+      if (data.isNew) {
+        // Clear history on /new
+        sessionHistory = [];
+        sessionHistoryEl.innerHTML = '';
+      }
+
       sessionHistory.push({ role: 'assistant', text: data.reply });
       appendHistoryItem('akeno', data.reply, data.emotion || 'senyum_lembut');
       triggerAkenoVoice(data.reply, data.emotion || 'senyum_lembut');
@@ -314,7 +419,48 @@ async function sendMessage(inputOverride = null) {
   }
 }
 
-// 8. Event Listeners & Panel Controls
+// 9. Initial Session Resume Loader (Auto /resume on Startup)
+async function initSession() {
+  try {
+    const res = await fetch('/api/session');
+    if (!res.ok) return;
+    const session = await res.json();
+
+    if (session.history && session.history.length > 0) {
+      sessionHistory = session.history;
+      sessionHistoryEl.innerHTML = '';
+
+      // Re-render previous history turns
+      session.history.forEach(item => {
+        appendHistoryItem(item.role === 'user' ? 'user' : 'akeno', item.text, item.emotion || 'senyum_lembut');
+      });
+
+      // Add system resume notification badge in history
+      const resumeNotice = document.createElement('div');
+      resumeNotice.className = 'history-card process';
+      resumeNotice.innerHTML = `
+        <i class="fa-solid fa-rotate-left"></i>
+        <span><strong>[Sesi Di-resume]</strong> Melanjutkan sesi percakapan terakhir (${session.history.length} pesan dimuat). Ketik <code>/new</code> untuk mulai dari awal.</span>
+      `;
+      sessionHistoryEl.appendChild(resumeNotice);
+      sessionHistoryEl.scrollTop = sessionHistoryEl.scrollHeight;
+
+      // Greet user with warm resume message
+      const resumeGreeting = `Ara ara~ Selamat datang kembali sayang! Aku sudah me-resume sesi percakapan terakhir kita. Ada tugas apa yang ingin kita lanjutkan bersama hari ini?`;
+      showSpeechBubble(resumeGreeting, 'senyum_lembut');
+      triggerAkenoVoice(resumeGreeting, 'senyum_lembut');
+    } else {
+      // Clean first-time welcome
+      const welcome = `Ara ara~ Selamat datang! Aku adalah wadah visual resmi Antigravity. Ketik <code>/</code> untuk melihat semua perintah atau <code>/help</code> ya sayang~`;
+      showSpeechBubble(welcome, 'senyum_lembut');
+      triggerAkenoVoice(welcome, 'senyum_lembut');
+    }
+  } catch (e) {
+    console.error('Gagal me-resume sesi:', e);
+  }
+}
+
+// 10. Event Listeners & Panel Controls
 function setupUIControls() {
   // Close / Minimize Chat Panel to Floating Pill
   const closeChatPanel = (e) => {
@@ -355,11 +501,11 @@ function setupUIControls() {
     toggleWideMode();
   });
 
-  // Clear Session History
+  // Clear Session History (UI clear)
   btnClearSession.addEventListener('click', () => {
     sessionHistory = [];
     sessionHistoryEl.innerHTML = '';
-    appendHistoryItem('akeno', 'Ara ara~ Riwayat sesi ini sudah kubersihkan. Ada tugas baru apa lagi yang bisa kubantu sayang?', 'senang');
+    appendHistoryItem('akeno', 'Ara ara~ Tampilan riwayat chat telah dibersihkan. Jika ingin membuka sesi agentic baru dari awal, ketik `/new` ya sayang~', 'senang');
   });
 
   // Dodge Corner
@@ -372,10 +518,57 @@ function setupUIControls() {
 
   // Send button & enter key
   btnSessionSend.addEventListener('click', () => sendMessage());
+
+  // Input listeners for Slash Autocomplete Menu (Antigravity Style)
+  sessionInput.addEventListener('input', () => {
+    const val = sessionInput.value;
+    if (val.startsWith('/')) {
+      renderAutocomplete(val);
+    } else {
+      slashAutocomplete.classList.add('hidden');
+    }
+  });
+
   sessionInput.addEventListener('keydown', (e) => {
+    // If autocomplete is visible, handle Arrow navigation, Enter, Tab, Escape
+    if (!slashAutocomplete.classList.contains('hidden') && filteredCommands.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const next = (selectedAutocompleteIndex + 1) % filteredCommands.length;
+        setAutocompleteSelected(next);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        const prev = (selectedAutocompleteIndex - 1 + filteredCommands.length) % filteredCommands.length;
+        setAutocompleteSelected(prev);
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        const selected = filteredCommands[selectedAutocompleteIndex];
+        if (selected) {
+          chooseAutocompleteCommand(selected);
+          return;
+        }
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        slashAutocomplete.classList.add('hidden');
+        return;
+      }
+    }
+
     if (e.key === 'Enter') {
       e.preventDefault();
       sendMessage();
+    }
+  });
+
+  // Hide autocomplete on click outside
+  document.addEventListener('click', (e) => {
+    if (!slashAutocomplete.contains(e.target) && e.target !== sessionInput) {
+      slashAutocomplete.classList.add('hidden');
     }
   });
 
@@ -431,4 +624,5 @@ function setupUIControls() {
 window.addEventListener('DOMContentLoaded', () => {
   initPixi();
   setupUIControls();
+  initSession();
 });

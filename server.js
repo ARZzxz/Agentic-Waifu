@@ -13,6 +13,35 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+const DATA_DIR = path.join(__dirname, 'data');
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+const SESSION_FILE = path.join(DATA_DIR, 'session.json');
+
+// Session Persistence Helpers
+function loadSavedSession() {
+  try {
+    if (fs.existsSync(SESSION_FILE)) {
+      const parsed = JSON.parse(fs.readFileSync(SESSION_FILE, 'utf8'));
+      if (parsed && Array.isArray(parsed.history)) return parsed;
+    }
+  } catch (e) {
+    console.error('Gagal membaca session.json:', e);
+  }
+  return { id: Date.now(), isContinued: false, history: [] };
+}
+
+function saveSession(data) {
+  try {
+    fs.writeFileSync(SESSION_FILE, JSON.stringify(data, null, 2), 'utf8');
+  } catch (e) {
+    console.error('Gagal menyimpan session.json:', e);
+  }
+}
+
+let isSessionContinued = true; // Default: resume and continue previous session
+
 const AKENO_SYSTEM_PROMPT = `
 Kamu adalah Akeno Himejima dari High School DxD.
 Kamu adalah WADAH VISUAL & AVATAR RESMI dari ANTIGRAVITY di laptop Linux Ubuntu ini.
@@ -36,7 +65,7 @@ function stripAnsi(str) {
 }
 
 // Helper: Run Antigravity CLI Agentic Engine
-function runAntigravity(prompt) {
+function runAntigravity(prompt, forceNew = false) {
   return new Promise((resolve) => {
     const wrappedPrompt = `
 Instruksi Persona & Peran:
@@ -48,7 +77,12 @@ Tugas/Perintah Pengguna:
 ${prompt}
 `;
     const escaped = wrappedPrompt.replace(/'/g, "'\\''");
-    exec(`agy --dangerously-skip-permissions --print '${escaped}'`, {
+    const continueFlag = (!forceNew && isSessionContinued) ? '--continue' : '';
+    
+    // Once we run a command, mark as continued for future turns
+    isSessionContinued = true;
+
+    exec(`agy ${continueFlag} --dangerously-skip-permissions --print '${escaped}'`, {
       maxBuffer: 1024 * 1024 * 10,
       timeout: 120000,
       env: {
@@ -223,6 +257,32 @@ function handleSlashCommand(input) {
   const trimmed = input.trim();
   const lower = trimmed.toLowerCase();
 
+  // /resume : Continue / resume last session
+  if (lower === '/resume') {
+    isSessionContinued = true;
+    const session = loadSavedSession();
+    const count = session.history ? session.history.length : 0;
+    return {
+      type: 'session_resume',
+      reply: `Ara ara~ Selamat datang kembali sayang! Aku sudah me-resume sesi percakapan terakhir kita (${count} pesan tersimpan). Semua konteks aktif kembali, siap melanjutkan tugas apa hari ini?`,
+      emotion: 'senyum_lembut',
+      history: session.history
+    };
+  }
+
+  // /new : Start fresh session
+  if (lower === '/new') {
+    isSessionContinued = false;
+    const newSession = { id: Date.now(), isContinued: false, history: [] };
+    saveSession(newSession);
+    return {
+      type: 'session_new',
+      reply: 'Ara ara~ Sesi percakapan baru telah dimulai! Semua riwayat sebelumnya telah diarsipkan. Ada tugas baru apa yang ingin kita kerjakan bersama sayang?',
+      emotion: 'senang',
+      history: []
+    };
+  }
+
   // /usage or /quota
   if (lower === '/usage' || lower === '/quota') {
     return {
@@ -290,6 +350,11 @@ Kamu bisa memanggil mereka melalui instruksi percakapan atau perintah \`/teamwor
       type: 'static',
       reply: `Ara ara~ Ini daftar lengkap perintah Antigravity & kontrol yang bisa kamu gunakan:
 
+⚡ **Sesi & Kontrol:**
+• \`/resume\` : Resume & lanjutkan sesi percakapan terakhir
+• \`/new\` : Buka sesi percakapan baru yang bersih
+• \`/clear\` : Bersihkan tampilan riwayat sesi di layar
+
 ⚡ **Slash Commands Antigravity:**
 • \`/usage\` : Cek sisa kuota model Antigravity (Gemini & Claude)
 • \`/plan <tugas>\` : Buat rencana langkah terstruktur sebelum eksekusi
@@ -304,7 +369,6 @@ Kamu bisa memanggil mereka melalui instruksi percakapan atau perintah \`/teamwor
 • \`/models\` : Lihat model AI Antigravity yang tersedia
 • \`/mcp\` : Cek status server MCP
 • \`/changelog\` : Lihat catatan pembaruan Antigravity
-• \`/clear\` : Bersihkan tampilan riwayat sesi
 
 💻 **Perintah Sistem & Terminal Instan:**
 • \`cek ram\` : Cek penggunaan memori RAM laptop
@@ -319,7 +383,7 @@ Kamu bisa memanggil mereka melalui instruksi percakapan atau perintah \`/teamwor
 • \`/restart\` : Nyalakan ulang laptop
 • \`/shutdown\` : Matikan laptop
 
-Ketik apa saja di kolom input atau klik tombol pintasan di bawah ya sayang~`,
+Ketik \`/\` untuk memunculkan menu bantuan perintah otomatis ya sayang~`,
       emotion: 'senyum_lembut'
     };
   }
@@ -405,6 +469,26 @@ function isAgenticIntent(text) {
   return keywords.some(k => lower.includes(k));
 }
 
+// Session API Endpoints
+app.get('/api/session', (req, res) => {
+  const session = loadSavedSession();
+  res.json({
+    id: session.id,
+    isContinued: isSessionContinued,
+    history: session.history || []
+  });
+});
+
+app.post('/api/session/new', (req, res) => {
+  isSessionContinued = false;
+  const newSession = { id: Date.now(), isContinued: false, history: [] };
+  saveSession(newSession);
+  res.json({
+    success: true,
+    message: 'Sesi baru dimulai'
+  });
+});
+
 // Check configuration status
 app.get('/api/status', (req, res) => {
   res.json({
@@ -420,6 +504,8 @@ app.post('/api/chat', async (req, res) => {
   if (!message) {
     return res.status(400).json({ error: 'Pesan tidak boleh kosong.' });
   }
+
+  const currentSession = loadSavedSession();
 
   // Route 0: Power Management (Sleep, Restart, Shutdown)
   const powerAction = checkPowerIntent(message);
@@ -454,6 +540,11 @@ app.post('/api/chat', async (req, res) => {
       emotion = emotionMatch[1].trim();
       cleanText = result.replace(emotionMatch[0], '').trim();
     }
+
+    currentSession.history.push({ role: 'user', text: message });
+    currentSession.history.push({ role: 'assistant', text: cleanText, emotion });
+    saveSession(currentSession);
+
     return res.json({
       reply: cleanText,
       fullText: result,
@@ -466,7 +557,34 @@ app.post('/api/chat', async (req, res) => {
   const slashAction = handleSlashCommand(message);
   if (slashAction) {
     console.log(`[Slash Command Triggered] Type: ${slashAction.type}`);
+
+    if (slashAction.type === 'session_resume') {
+      return res.json({
+        reply: slashAction.reply,
+        fullText: `[${slashAction.emotion}] ${slashAction.reply}`,
+        emotion: slashAction.emotion,
+        isAgentic: false,
+        isResume: true,
+        history: slashAction.history
+      });
+    }
+
+    if (slashAction.type === 'session_new') {
+      return res.json({
+        reply: slashAction.reply,
+        fullText: `[${slashAction.emotion}] ${slashAction.reply}`,
+        emotion: slashAction.emotion,
+        isAgentic: false,
+        isNew: true,
+        history: []
+      });
+    }
+
     if (slashAction.type === 'static') {
+      currentSession.history.push({ role: 'user', text: message });
+      currentSession.history.push({ role: 'assistant', text: slashAction.reply, emotion: slashAction.emotion });
+      saveSession(currentSession);
+
       return res.json({
         reply: slashAction.reply,
         fullText: `[${slashAction.emotion}] ${slashAction.reply}`,
@@ -484,6 +602,11 @@ app.post('/api/chat', async (req, res) => {
         emotion = emotionMatch[1].trim();
         cleanText = result.replace(emotionMatch[0], '').trim();
       }
+
+      currentSession.history.push({ role: 'user', text: message });
+      currentSession.history.push({ role: 'assistant', text: cleanText, emotion });
+      saveSession(currentSession);
+
       return res.json({
         reply: cleanText,
         fullText: result,
@@ -501,6 +624,11 @@ app.post('/api/chat', async (req, res) => {
         emotion = emotionMatch[1].trim();
         cleanText = result.replace(emotionMatch[0], '').trim();
       }
+
+      currentSession.history.push({ role: 'user', text: message });
+      currentSession.history.push({ role: 'assistant', text: cleanText, emotion });
+      saveSession(currentSession);
+
       return res.json({
         reply: cleanText,
         fullText: result,
@@ -524,6 +652,10 @@ app.post('/api/chat', async (req, res) => {
         emotion = emotionMatch[1].trim();
         cleanText = result.replace(emotionMatch[0], '').trim();
       }
+
+      currentSession.history.push({ role: 'user', text: message });
+      currentSession.history.push({ role: 'assistant', text: cleanText, emotion });
+      saveSession(currentSession);
 
       return res.json({
         reply: cleanText,
@@ -575,6 +707,10 @@ app.post('/api/chat', async (req, res) => {
         cleanText = text.replace(emotionMatch[0], '').trim();
       }
 
+      currentSession.history.push({ role: 'user', text: message });
+      currentSession.history.push({ role: 'assistant', text: cleanText, emotion });
+      saveSession(currentSession);
+
       return res.json({
         reply: cleanText,
         fullText: text,
@@ -584,8 +720,13 @@ app.post('/api/chat', async (req, res) => {
     } catch (err) {
       console.error('Gemini API Error, falling back to Antigravity CLI:', err.message);
       const agyRes = await runAntigravity(message);
+      const cleanText = agyRes.replace(/^\[(.*?)\]\s*/, '');
+      currentSession.history.push({ role: 'user', text: message });
+      currentSession.history.push({ role: 'assistant', text: cleanText, emotion: 'senyum_lembut' });
+      saveSession(currentSession);
+
       return res.json({
-        reply: agyRes.replace(/^\[(.*?)\]\s*/, ''),
+        reply: cleanText,
         fullText: agyRes,
         emotion: 'senyum_lembut',
         isAgentic: true
@@ -595,8 +736,13 @@ app.post('/api/chat', async (req, res) => {
 
   // Fallback: Antigravity CLI
   const fallbackRes = await runAntigravity(message);
+  const cleanFallback = fallbackRes.replace(/^\[(.*?)\]\s*/, '');
+  currentSession.history.push({ role: 'user', text: message });
+  currentSession.history.push({ role: 'assistant', text: cleanFallback, emotion: 'senyum_lembut' });
+  saveSession(currentSession);
+
   res.json({
-    reply: fallbackRes.replace(/^\[(.*?)\]\s*/, ''),
+    reply: cleanFallback,
     fullText: fallbackRes,
     emotion: 'senyum_lembut',
     isAgentic: true
