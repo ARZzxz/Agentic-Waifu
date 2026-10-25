@@ -173,6 +173,9 @@ html, body {
 
 .speech-bubble.hidden {
   display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
 }
 
 .speech-bubble-header {
@@ -195,22 +198,29 @@ html, body {
 .bubble-actions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
+  position: relative;
+  z-index: 100;
 }
 
 .bubble-btn {
-  background: rgba(157, 78, 221, 0.18);
-  border: 1px solid rgba(157, 78, 221, 0.35);
+  background: rgba(157, 78, 221, 0.22);
+  border: 1px solid rgba(157, 78, 221, 0.4);
   color: #e9d5ff;
-  border-radius: 6px;
-  padding: 2px 7px;
-  font-size: 0.64rem;
+  border-radius: 8px;
+  padding: 3px 8px;
+  font-size: 0.68rem;
   font-weight: 600;
   cursor: pointer;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 4px;
   transition: all 0.15s ease;
+  pointer-events: auto !important;
+}
+
+.bubble-btn i {
+  pointer-events: none;
 }
 
 .bubble-btn:hover {
@@ -219,15 +229,29 @@ html, body {
 }
 
 .bubble-btn.close {
-  padding: 2px 5px;
+  padding: 0;
   border-radius: 50%;
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
+  font-size: 0.72rem;
+  background: rgba(247, 37, 133, 0.2);
+  border-color: rgba(247, 37, 133, 0.45);
 }
 
 .bubble-btn.close:hover {
-  background: #f72585;
+  background: #f72585 !important;
+  color: #fff !important;
+  border-color: #f72585 !important;
+  transform: scale(1.1);
+}
+
+.bubble-btn.close:active {
+  transform: scale(0.92);
 }
 
 .speech-bubble-body {
@@ -366,15 +390,20 @@ html, body {
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(157, 78, 221, 0.3);
   color: #e9d5ff;
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   border-radius: 6px;
   cursor: pointer;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   transition: all 0.2s ease;
+  pointer-events: auto !important;
+}
+
+.panel-btn i {
+  pointer-events: none;
 }
 
 .panel-btn:hover {
@@ -383,8 +412,20 @@ html, body {
   transform: scale(1.08);
 }
 
+.panel-btn.close-btn {
+  background: rgba(247, 37, 133, 0.15);
+  border-color: rgba(247, 37, 133, 0.35);
+}
+
 .panel-btn.close-btn:hover {
-  background: #f72585;
+  background: #f72585 !important;
+  color: #fff !important;
+  border-color: #f72585 !important;
+  transform: scale(1.1);
+}
+
+.panel-btn:active {
+  transform: scale(0.92);
 }
 
 /* Scrollable History */

@@ -319,25 +319,39 @@ async function sendMessage(inputOverride = null) {
 
 // 8. Event Listeners & Panel Controls
 function setupUIControls() {
-  // Minimize Panel to Floating Pill
-  btnMinimizePanel.addEventListener('click', () => {
+  // Close / Minimize Chat Panel to Floating Pill
+  const closeChatPanel = (e) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
     minimizePanel();
-  });
+  };
+  btnMinimizePanel.addEventListener('click', closeChatPanel);
+  btnMinimizePanel.addEventListener('pointerdown', closeChatPanel);
 
   // Expand Panel from Minimized Pill
-  btnExpandPanel.addEventListener('click', () => {
+  btnExpandPanel.addEventListener('click', (e) => {
+    e.stopPropagation();
     expandPanel();
   });
 
   // Expand Panel from Speech Bubble
-  btnBubbleExpand.addEventListener('click', () => {
+  btnBubbleExpand.addEventListener('click', (e) => {
+    e.stopPropagation();
     expandPanel();
   });
 
-  // Close Speech Bubble
-  btnBubbleClose.addEventListener('click', () => {
+  // Close Speech Bubble ('x' button)
+  const closeSpeechBubble = (e) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
     hideSpeechBubble();
-  });
+  };
+  btnBubbleClose.addEventListener('click', closeSpeechBubble);
+  btnBubbleClose.addEventListener('pointerdown', closeSpeechBubble);
 
   // Toggle Wide / Slim Mode
   btnToggleWide.addEventListener('click', () => {
