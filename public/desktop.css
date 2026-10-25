@@ -1,0 +1,240 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  user-select: none;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent !important;
+}
+
+.companion-layout {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+/* 1. Live2D Avatar Stage (250px Slim Column) */
+.avatar-stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10;
+  cursor: grab;
+}
+
+.avatar-stage canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  opacity: 1.0;
+  transition: opacity 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Hover Faded Effect: Softens avatar when mouse hovers over her */
+.avatar-stage:hover canvas {
+  opacity: 0.35;
+}
+
+/* Ghost Mode from Tray */
+.companion-layout.ghost-mode .avatar-stage canvas {
+  opacity: 0.15 !important;
+}
+.companion-layout.ghost-mode {
+  pointer-events: none !important;
+}
+
+/* 2. Speech Response Box (Positioned at Thighs / Skirt Area - FACE 100% CLEAR!) */
+.speech-box {
+  position: absolute;
+  bottom: 58px;
+  left: 10px;
+  right: 10px;
+  background: rgba(22, 17, 34, 0.94);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(157, 78, 221, 0.45);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  border-radius: 14px;
+  padding: 8px 12px;
+  z-index: 90;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  pointer-events: auto;
+}
+
+.speech-box.hidden {
+  opacity: 0;
+  transform: translateY(6px) scale(0.95);
+  pointer-events: none !important;
+  display: none !important;
+}
+
+.speech-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.speech-tag {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #d8b4fe;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.speech-close-btn {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 1.1rem;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 2px;
+}
+
+.speech-close-btn:hover {
+  color: #f72585;
+}
+
+.speech-content {
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: #ffffff;
+  max-height: 145px;
+  overflow-y: auto;
+  user-select: text;
+}
+
+.speech-content::-webkit-scrollbar {
+  width: 3px;
+}
+.speech-content::-webkit-scrollbar-thumb {
+  background: #9d4edd;
+  border-radius: 2px;
+}
+
+/* 3. Bottom Chat Bar */
+.chat-bottom-bar {
+  position: absolute;
+  bottom: 12px;
+  left: 10px;
+  right: 10px;
+  z-index: 95;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  pointer-events: auto;
+}
+
+.chat-pill {
+  background: rgba(22, 17, 34, 0.92);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(157, 78, 221, 0.45);
+  color: #e9d5ff;
+  border-radius: 16px;
+  padding: 7px 14px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  flex: 1;
+  justify-content: center;
+}
+
+.chat-pill:hover {
+  background: #7b2cbf;
+  color: #fff;
+  transform: translateY(-2px);
+}
+
+.dodge-btn {
+  background: rgba(22, 17, 34, 0.88);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(157, 78, 221, 0.4);
+  color: #d8b4fe;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.dodge-btn:hover {
+  background: #7b2cbf;
+  color: #fff;
+  transform: scale(1.1);
+}
+
+.chat-expanded-box {
+  display: none;
+  width: 100%;
+  background: rgba(22, 17, 34, 0.98);
+  backdrop-filter: blur(16px);
+  border: 1px solid #9d4edd;
+  border-radius: 16px;
+  padding: 4px 6px 4px 12px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+  animation: popIn 0.2s ease;
+}
+
+.chat-expanded-box.active {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+#mini-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #fff;
+  font-size: 0.78rem;
+  padding: 3px 0;
+}
+
+#btn-mini-send {
+  background: linear-gradient(135deg, #9d4edd, #f72585);
+  border: none;
+  color: #fff;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  transition: transform 0.2s ease;
+}
+
+#btn-mini-send:hover {
+  transform: scale(1.1);
+}
+
+@keyframes popIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}

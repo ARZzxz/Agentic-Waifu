@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Professional AI Assistant</title>
+  
+  <!-- Live2D SDK Dependencies -->
+  <script src="https://cdn.jsdelivr.net/gh/dylanNew/live2d/webgl/Live2D/lib/live2d.min.js"></script>
+  <script src="https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pixi.js@6.5.9/dist/browser/pixi.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pixi-live2d-display@0.4.0/dist/index.min.js"></script>
+
+  <!-- Google Fonts & FontAwesome -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Yuji+Boku&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Background Ambient Effects -->
+  <div class="ambient-bg">
+    <div class="glow-orb orb-1"></div>
+    <div class="glow-orb orb-2"></div>
+  </div>
+
+  <div class="app-layout">
+    <!-- Live2D Canvas Viewport -->
+    <div class="canvas-container" id="canvas-container">
+      <canvas id="live2d-canvas"></canvas>
+      
+      <!-- Speech Bubble floating near avatar -->
+      <div class="speech-bubble-container" id="speech-bubble-container">
+        <div class="speech-bubble">
+          <div class="bubble-header">
+            <span class="avatar-tag" id="emotion-badge">
+              <i class="fa-solid fa-heart"></i> Siap Membantu
+            </span>
+            <span class="character-title">AI Assistant</span>
+          </div>
+          <div class="bubble-content" id="bubble-text">
+            Selamat datang. Saya siap membantu Anda dengan analisis, ide, dan komunikasi profesional hari ini.
+          </div>
+        </div>
+      </div>
+
+      <!-- Canvas Quick Controls -->
+      <div class="canvas-controls">
+        <button class="tool-btn" id="btn-reset-pos" title="Reset Posisi Model">
+          <i class="fa-solid fa-arrows-to-dot"></i>
+        </button>
+        <button class="tool-btn" id="btn-toggle-bubble" title="Sembunyikan / Tampilkan Bubble">
+          <i class="fa-solid fa-comment-dots"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Right Sidebar: Interactive Chat & Settings -->
+    <div class="chat-sidebar">
+      <div class="sidebar-header">
+        <div class="profile-meta">
+          <div class="avatar-ring">
+            <div class="avatar-status-dot online" id="status-dot"></div>
+            <i class="fa-solid fa-feather-pointed avatar-icon"></i>
+          </div>
+          <div class="profile-info">
+            <h2>AI Assistant</h2>
+            <p id="character-status">AI Assistant • Ready</p>
+          </div>
+        </div>
+        <button class="icon-btn" id="btn-settings" title="Pengaturan API & Model">
+          <i class="fa-solid fa-gear"></i>
+        </button>
+      </div>
+
+      <!-- Quick Action Pills -->
+      <div class="quick-prompts">
+        <button class="pill-btn" data-prompt="Halo, bisa bantu saya memulai percakapan profesional?">💬 Mulai Percakapan</button>
+        <button class="pill-btn" data-prompt="Saya butuh bantuan menganalisis ide atau tugas hari ini.">📊 Butuh Analisis</button>
+        <button class="pill-btn" data-prompt="Bisa bantu saya meninjau dan memperbaiki kode ini?">💻 Review Kode</button>
+      </div>
+
+      <!-- Chat Messages Container -->
+      <div class="chat-messages" id="chat-messages">
+        <div class="message-row assistant">
+          <div class="message-bubble">
+            <p>Selamat datang. Saya siap membantu Anda dalam pekerjaan, analisis, dan komunikasi sehari-hari.</p>
+            <span class="message-time">Baru saja</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Input Area -->
+      <div class="chat-input-wrapper">
+        <div class="input-container">
+          <textarea id="chat-input" placeholder="Ketik pesan untuk asisten..." rows="1"></textarea>
+          <button id="btn-send" class="send-btn" title="Kirim">
+            <i class="fa-solid fa-paper-plane"></i>
+          </button>
+        </div>
+        <div class="input-footer">
+          <span>Powered by Google Gemini Pro</span>
+          <span id="api-status-indicator" class="api-status warning">Memeriksa API Key...</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="modal-overlay" id="settings-modal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-sliders"></i> Pengaturan AI & Model Avatar</h3>
+        <button class="close-modal-btn" id="btn-close-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="input-api-key">Gemini API Key:</label>
+          <div class="input-with-action">
+            <input type="password" id="input-api-key" placeholder="AIzaSy...">
+            <button type="button" id="btn-toggle-key-visibility" class="sub-btn">
+              <i class="fa-solid fa-eye"></i>
+            </button>
+          </div>
+          <small>API key akan disimpan pada file <code>.env</code> lokal di perangkat Anda.</small>
+        </div>
+
+        <div class="form-group">
+          <label for="select-model">Model AI:</label>
+          <select id="select-model">
+            <option value="gemini-3.8-flash">Gemini 3.8 Flash (Aktif & Direkomendasikan)</option>
+            <option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
+            <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro Preview</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="select-live2d">Pilihan Model Live2D:</label>
+          <select id="select-live2d">
+            <option value="models/haru/haru_greeter_t03.model3.json">Default (Haru - Live2D Cubism 4)</option>
+            <option value="custom">Model Kustom Sendiri (Letakkan di public/models/)</option>
+          </select>
+        </div>
+
+        <div class="info-callout">
+          <h4><i class="fa-solid fa-folder-open"></i> Ingin Menggunakan Model Kustom?</h4>
+          <p>Buat folder baru di:</p>
+          <code>/home/user/live2d-gemini-assistant/public/models/nama_folder/</code>
+          <p>Lalu letakkan file <code>.moc3</code>, asset tekstur, dan <code>.model3.json</code> di dalam folder tersebut.</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-cancel-settings">Tutup</button>
+        <button class="btn btn-primary" id="btn-save-settings">Simpan Pengaturan</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

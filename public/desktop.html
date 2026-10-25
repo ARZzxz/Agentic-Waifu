@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Akeno Floating Pet</title>
+  
+  <!-- Live2D SDK Dependencies -->
+  <script src="https://cdn.jsdelivr.net/gh/dylanNew/live2d/webgl/Live2D/lib/live2d.min.js"></script>
+  <script src="https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pixi.js@6.5.9/dist/browser/pixi.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pixi-live2d-display@0.4.0/dist/index.min.js"></script>
+
+  <!-- Google Fonts & FontAwesome -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <link rel="stylesheet" href="desktop.css">
+</head>
+<body class="desktop-mode">
+  <div class="companion-layout" id="companion-layout">
+    <!-- Live2D Avatar Stage (Upper body, face & head are completely clear!) -->
+    <div class="avatar-stage" id="avatar-stage">
+      <canvas id="live2d-canvas"></canvas>
+    </div>
+
+    <!-- Speech Response Card (Positioned directly over lower body / thighs area) -->
+    <div class="speech-box hidden" id="speech-box">
+      <div class="speech-header">
+        <span class="speech-tag" id="speech-tag">
+          <i class="fa-solid fa-heart"></i> Akeno
+        </span>
+        <button class="speech-close-btn" id="btn-close-speech" title="Tutup response">&times;</button>
+      </div>
+      <div class="speech-content" id="speech-content"></div>
+    </div>
+
+    <!-- Bottom Chat Bar (Compact Pill + Dodge button) -->
+    <div class="chat-bottom-bar" id="chat-bar">
+      <div class="chat-pill" id="chat-pill">
+        <i class="fa-solid fa-comment-dots"></i> <span>Tanya Akeno...</span>
+      </div>
+      <button class="dodge-btn" id="btn-dodge" title="Pindah Sisi (Dodge Kiri / Kanan)">
+        <i class="fa-solid fa-arrows-left-right"></i>
+      </button>
+
+      <div class="chat-expanded-box" id="chat-box">
+        <input type="text" id="mini-input" placeholder="Ketik pesan..." autocomplete="off">
+        <button id="btn-mini-send"><i class="fa-solid fa-paper-plane"></i></button>
+      </div>
+    </div>
+  </div>
+
+  <script src="desktop.js"></script>
+</body>
+</html>
