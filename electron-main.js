@@ -4,6 +4,7 @@ const path = require('path');
 app.commandLine.appendSwitch('enable-transparent-visuals');
 app.commandLine.appendSwitch('no-sandbox');
 app.commandLine.appendSwitch('ozone-platform', 'x11');
+app.commandLine.appendSwitch('disable-http-cache');
 
 let mainWindow = null;
 let tray = null;

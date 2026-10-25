@@ -11,7 +11,13 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use((req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  next();
+});
+app.use(express.static(path.join(__dirname, 'public'), { etag: false, maxAge: 0 }));
 
 const DATA_DIR = path.join(__dirname, 'data');
 if (!fs.existsSync(DATA_DIR)) {
@@ -41,6 +47,78 @@ function saveSession(data) {
 }
 
 let isSessionContinued = true; // Default: resume and continue previous session
+let activeConversationId = null; // Specific Antigravity conversation ID if chosen
+
+function cleanTitle(str) {
+  if (!str) return 'Percakapan Antigravity';
+  const m1 = str.match(/Tugas\/(?:Perintah|Pertanyaan) Pengguna:\s*([\s\S]*?)(?:<\/USER_REQUEST>|\n\n|$)/i);
+  if (m1) return m1[1].replace(/<[^>]+>/g, '').trim().slice(0, 42);
+  const m2 = str.match(/<USER_REQUEST>([\s\S]*?)<\/USER_REQUEST>/i);
+  if (m2) {
+    const cleaned = m2[1]
+      .replace(/Instruksi Persona[\s\S]*?(?:Tugas\/(?:Perintah|Pertanyaan) Pengguna:|Pertanyaan Pengguna:|Tugas Pengguna:)\s*/i, '')
+      .replace(/<[^>]+>/g, '')
+      .trim();
+    if (cleaned) return cleaned.slice(0, 42);
+  }
+  const stripped = str
+    .replace(/<[^>]+>/g, '')
+    .replace(/Instruksi Persona[\s\S]*?(?:Tugas\/(?:Perintah|Pertanyaan) Pengguna:|Pertanyaan Pengguna:|Tugas Pengguna:)\s*/i, '')
+    .trim();
+  return stripped.slice(0, 42) || 'Percakapan Antigravity';
+}
+
+// Helper: Scan previous Antigravity and Local sessions
+function getAvailableSessions() {
+  const sessions = [];
+  const brainDir = path.join(process.env.HOME || '/home/user', '.gemini', 'antigravity-cli', 'brain');
+
+  try {
+    if (fs.existsSync(brainDir)) {
+      const dirs = fs.readdirSync(brainDir, { withFileTypes: true })
+        .filter(d => d.isDirectory() && d.name.length > 20)
+        .map(d => {
+          const fullPath = path.join(brainDir, d.name);
+          const stat = fs.statSync(fullPath);
+          let title = 'Percakapan Antigravity';
+          let msgCount = 0;
+          try {
+            const transcriptPath = path.join(fullPath, '.system_generated', 'logs', 'transcript.jsonl');
+            if (fs.existsSync(transcriptPath)) {
+              const lines = fs.readFileSync(transcriptPath, 'utf8').trim().split('\n').filter(Boolean);
+              msgCount = lines.length;
+              if (lines.length > 0) {
+                const first = JSON.parse(lines[0]);
+                if (first && first.content) {
+                  title = cleanTitle(first.content);
+                }
+              }
+            }
+          } catch (e) {}
+
+          const dt = new Date(stat.mtime);
+          const timeStr = `${dt.getDate()}/${dt.getMonth() + 1} ${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
+
+          return {
+            id: d.name,
+            shortId: d.name.slice(0, 8),
+            title: title || 'Percakapan Antigravity',
+            time: timeStr,
+            mtime: stat.mtime.getTime(),
+            count: msgCount
+          };
+        })
+        .sort((a, b) => b.mtime - a.mtime)
+        .slice(0, 15);
+
+      sessions.push(...dirs);
+    }
+  } catch (e) {
+    console.error('Gagal mengambil daftar sesi brain:', e);
+  }
+
+  return sessions;
+}
 
 const AKENO_SYSTEM_PROMPT = `
 Kamu adalah Akeno Himejima dari High School DxD.
@@ -77,12 +155,20 @@ Tugas/Perintah Pengguna:
 ${prompt}
 `;
     const escaped = wrappedPrompt.replace(/'/g, "'\\''");
-    const continueFlag = (!forceNew && isSessionContinued) ? '--continue' : '';
+    
+    let flag = '';
+    if (!forceNew) {
+      if (activeConversationId) {
+        flag = `--conversation ${activeConversationId}`;
+      } else if (isSessionContinued) {
+        flag = '--continue';
+      }
+    }
     
     // Once we run a command, mark as continued for future turns
     isSessionContinued = true;
 
-    exec(`agy ${continueFlag} --dangerously-skip-permissions --print '${escaped}'`, {
+    exec(`agy ${flag} --dangerously-skip-permissions --print '${escaped}'`, {
       maxBuffer: 1024 * 1024 * 10,
       timeout: 120000,
       env: {
@@ -257,9 +343,52 @@ function handleSlashCommand(input) {
   const trimmed = input.trim();
   const lower = trimmed.toLowerCase();
 
-  // /resume : Continue / resume last session
-  if (lower === '/resume') {
+  // /resume [session_id]
+  if (lower.startsWith('/resume')) {
+    const arg = trimmed.slice(7).trim();
     isSessionContinued = true;
+    
+    const available = getAvailableSessions();
+
+    if (arg && arg !== 'latest') {
+      // Find matching session by id or prefix
+      const match = available.find(s => s.id === arg || s.id.startsWith(arg) || s.shortId === arg);
+      if (match) {
+        activeConversationId = match.id;
+        
+        // Extract history turns from that conversation's transcript
+        let historyTurns = [];
+        try {
+          const tPath = path.join(process.env.HOME || '/home/user', '.gemini', 'antigravity-cli', 'brain', match.id, '.system_generated', 'logs', 'transcript.jsonl');
+          if (fs.existsSync(tPath)) {
+            const lines = fs.readFileSync(tPath, 'utf8').trim().split('\n').filter(Boolean);
+            lines.slice(-10).forEach(l => {
+              try {
+                const parsed = JSON.parse(l);
+                if (parsed.type === 'USER_INPUT' && parsed.content) {
+                  historyTurns.push({ role: 'user', text: cleanTitle(parsed.content) });
+                } else if (parsed.type === 'PLANNER_RESPONSE' && parsed.content) {
+                  historyTurns.push({ role: 'assistant', text: parsed.content, emotion: 'senyum_lembut' });
+                }
+              } catch(e) {}
+            });
+          }
+        } catch(e) {}
+
+        const session = { id: Date.now(), isContinued: true, history: historyTurns };
+        saveSession(session);
+
+        return {
+          type: 'session_resume',
+          reply: `Ara ara~ Sesi [${match.title}] (${match.shortId}) berhasil di-resume sayang! Konteks aktif kembali, siap melanjutkan tugas apa?`,
+          emotion: 'senyum_lembut',
+          history: historyTurns
+        };
+      }
+    }
+
+    // Default: resume latest session
+    activeConversationId = null;
     const session = loadSavedSession();
     const count = session.history ? session.history.length : 0;
     return {
@@ -273,6 +402,7 @@ function handleSlashCommand(input) {
   // /new : Start fresh session
   if (lower === '/new') {
     isSessionContinued = false;
+    activeConversationId = null;
     const newSession = { id: Date.now(), isContinued: false, history: [] };
     saveSession(newSession);
     return {
@@ -351,7 +481,7 @@ Kamu bisa memanggil mereka melalui instruksi percakapan atau perintah \`/teamwor
       reply: `Ara ara~ Ini daftar lengkap perintah Antigravity & kontrol yang bisa kamu gunakan:
 
 ⚡ **Sesi & Kontrol:**
-• \`/resume\` : Resume & lanjutkan sesi percakapan terakhir
+• \`/resume [id]\` : Resume sesi percakapan terakhir (atau pilih sesi spesifik)
 • \`/new\` : Buka sesi percakapan baru yang bersih
 • \`/clear\` : Bersihkan tampilan riwayat sesi di layar
 
@@ -475,12 +605,19 @@ app.get('/api/session', (req, res) => {
   res.json({
     id: session.id,
     isContinued: isSessionContinued,
+    activeConversationId,
     history: session.history || []
   });
 });
 
+app.get('/api/sessions', (req, res) => {
+  const list = getAvailableSessions();
+  res.json(list);
+});
+
 app.post('/api/session/new', (req, res) => {
   isSessionContinued = false;
+  activeConversationId = null;
   const newSession = { id: Date.now(), isContinued: false, history: [] };
   saveSession(newSession);
   res.json({

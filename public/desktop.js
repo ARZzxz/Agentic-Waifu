@@ -279,7 +279,90 @@ function toggleWideMode(forceState = null) {
   }
 }
 
-// 7. Slash Autocomplete Menu Methods
+// 7. Slash Autocomplete & Session Picker Methods
+let cachedSessions = null;
+
+async function loadAndShowResumeSessions(filterText = '') {
+  try {
+    const res = await fetch('/api/sessions');
+    if (res.ok) {
+      cachedSessions = await res.json();
+    }
+  } catch(e) {}
+
+  const sessions = cachedSessions || [];
+  const q = filterText.toLowerCase().trim();
+
+  // Create list of choices
+  const choices = [
+    {
+      cmd: '/resume latest',
+      id: 'latest',
+      isSession: true,
+      icon: '⚡',
+      title: 'Sesi Paling Baru (Terakhir)',
+      desc: 'Lanjutkan sesi percakapan paling baru'
+    }
+  ];
+
+  sessions.forEach(s => {
+    choices.push({
+      cmd: `/resume ${s.shortId}`,
+      id: s.shortId,
+      fullId: s.id,
+      isSession: true,
+      icon: '💬',
+      title: s.title,
+      desc: `[${s.time}] ${s.title} (${s.count} pesan)`
+    });
+  });
+
+  filteredCommands = choices.filter(c => {
+    return c.cmd.toLowerCase().includes(q) || c.desc.toLowerCase().includes(q) || c.id.toLowerCase().includes(q);
+  });
+
+  if (filteredCommands.length === 0) {
+    slashAutocomplete.classList.add('hidden');
+    return;
+  }
+
+  selectedAutocompleteIndex = 0;
+  slashList.innerHTML = '';
+
+  // Header for session selection
+  const headerEl = slashAutocomplete.querySelector('.slash-header');
+  if (headerEl) {
+    headerEl.innerHTML = `
+      <span><i class="fa-solid fa-clock-rotate-left"></i> Pilih Sesi Chat untuk Di-resume</span>
+      <span class="slash-hint">↑↓ pilih • Tab/Enter pilih sesi</span>
+    `;
+  }
+
+  filteredCommands.forEach((item, index) => {
+    const el = document.createElement('div');
+    el.className = `slash-item ${index === 0 ? 'selected' : ''}`;
+    el.dataset.index = index;
+    el.innerHTML = `
+      <span class="slash-item-icon">${item.icon}</span>
+      <span class="slash-item-cmd">${item.cmd}</span>
+      <span class="slash-item-desc">${item.desc}</span>
+    `;
+
+    el.addEventListener('mouseenter', () => {
+      setAutocompleteSelected(index);
+    });
+
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      chooseAutocompleteCommand(item);
+    });
+
+    slashList.appendChild(el);
+  });
+
+  slashAutocomplete.classList.remove('hidden');
+}
+
 function renderAutocomplete(filterText = '') {
   const query = filterText.toLowerCase().trim();
   filteredCommands = SLASH_COMMANDS.filter(c => {
@@ -293,6 +376,14 @@ function renderAutocomplete(filterText = '') {
 
   selectedAutocompleteIndex = 0;
   slashList.innerHTML = '';
+
+  const headerEl = slashAutocomplete.querySelector('.slash-header');
+  if (headerEl) {
+    headerEl.innerHTML = `
+      <span><i class="fa-solid fa-terminal"></i> Perintah Antigravity</span>
+      <span class="slash-hint">↑↓ pilih • Tab/Enter lengkapi</span>
+    `;
+  }
 
   filteredCommands.forEach((item, index) => {
     const el = document.createElement('div');
@@ -333,14 +424,26 @@ function setAutocompleteSelected(index) {
 }
 
 function chooseAutocompleteCommand(item) {
-  slashAutocomplete.classList.add('hidden');
-  if (item.takesArg) {
-    sessionInput.value = item.cmd + ' ';
+  // If choosing a session from the /resume submenu
+  if (item.isSession) {
+    sessionInput.value = `/resume ${item.id} `;
+    slashAutocomplete.classList.add('hidden');
     sessionInput.focus();
-  } else {
-    sessionInput.value = '';
-    sendMessage(item.cmd);
+    return;
   }
+
+  // If user chooses /resume from the main menu, open the sessions submenu
+  if (item.cmd === '/resume') {
+    sessionInput.value = '/resume ';
+    sessionInput.focus();
+    loadAndShowResumeSessions('');
+    return;
+  }
+
+  // For all commands: autocomplete into input with trailing space, DO NOT auto-send!
+  sessionInput.value = item.cmd + ' ';
+  slashAutocomplete.classList.add('hidden');
+  sessionInput.focus();
 }
 
 // 8. Send Command or Chat Message
@@ -391,6 +494,12 @@ async function sendMessage(inputOverride = null) {
         // Clear history on /new
         sessionHistory = [];
         sessionHistoryEl.innerHTML = '';
+      } else if (data.isResume && data.history) {
+        sessionHistory = data.history;
+        sessionHistoryEl.innerHTML = '';
+        data.history.forEach(item => {
+          appendHistoryItem(item.role === 'user' ? 'user' : 'akeno', item.text, item.emotion || 'senyum_lembut');
+        });
       }
 
       sessionHistory.push({ role: 'assistant', text: data.reply });
@@ -522,7 +631,10 @@ function setupUIControls() {
   // Input listeners for Slash Autocomplete Menu (Antigravity Style)
   sessionInput.addEventListener('input', () => {
     const val = sessionInput.value;
-    if (val.startsWith('/')) {
+    if (val === '/resume' || val.startsWith('/resume')) {
+      const filter = val.startsWith('/resume') ? val.slice(7).trim() : '';
+      loadAndShowResumeSessions(filter);
+    } else if (val.startsWith('/')) {
       renderAutocomplete(val);
     } else {
       slashAutocomplete.classList.add('hidden');
@@ -576,12 +688,19 @@ function setupUIControls() {
   document.querySelectorAll('.slash-chip').forEach(chip => {
     chip.addEventListener('click', () => {
       const cmd = chip.dataset.cmd;
-      if (cmd.endsWith(' ')) {
+      if (cmd === '/resume') {
+        sessionInput.value = '/resume ';
+        sessionInput.focus();
+        if (isMinimized) expandPanel();
+        loadAndShowResumeSessions('');
+      } else if (cmd.endsWith(' ')) {
         sessionInput.value = cmd;
         sessionInput.focus();
         if (isMinimized) expandPanel();
       } else {
-        sendMessage(cmd);
+        sessionInput.value = cmd + ' ';
+        sessionInput.focus();
+        if (isMinimized) expandPanel();
       }
     });
   });
