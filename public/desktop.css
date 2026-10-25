@@ -362,6 +362,35 @@ html, body {
   color: #f72585;
 }
 
+.session-topic-badge {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #93c5fd;
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  padding: 2px 7px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 140px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: default;
+}
+
+.session-topic-badge span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-topic-badge i {
+  color: #60a5fa;
+  font-size: 0.65rem;
+}
+
 .process-indicator {
   font-size: 0.68rem;
   color: #fbbf24;

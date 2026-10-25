@@ -51,21 +51,22 @@ let activeConversationId = null; // Specific Antigravity conversation ID if chos
 
 function cleanTitle(str) {
   if (!str) return 'Percakapan Antigravity';
-  const m1 = str.match(/Tugas\/(?:Perintah|Pertanyaan) Pengguna:\s*([\s\S]*?)(?:<\/USER_REQUEST>|\n\n|$)/i);
-  if (m1) return m1[1].replace(/<[^>]+>/g, '').trim().slice(0, 42);
-  const m2 = str.match(/<USER_REQUEST>([\s\S]*?)<\/USER_REQUEST>/i);
-  if (m2) {
-    const cleaned = m2[1]
-      .replace(/Instruksi Persona[\s\S]*?(?:Tugas\/(?:Perintah|Pertanyaan) Pengguna:|Pertanyaan Pengguna:|Tugas Pengguna:)\s*/i, '')
-      .replace(/<[^>]+>/g, '')
-      .trim();
-    if (cleaned) return cleaned.slice(0, 42);
+  let t = str;
+  const m1 = t.match(/Tugas\/(?:Perintah|Pertanyaan) Pengguna:\s*([\s\S]*?)(?:<\/USER_REQUEST>|\n\n|$)/i);
+  if (m1) {
+    t = m1[1];
+  } else {
+    const m2 = t.match(/<USER_REQUEST>([\s\S]*?)<\/USER_REQUEST>/i);
+    if (m2) t = m2[1];
   }
-  const stripped = str
+  t = t
     .replace(/<[^>]+>/g, '')
     .replace(/Instruksi Persona[\s\S]*?(?:Tugas\/(?:Perintah|Pertanyaan) Pengguna:|Pertanyaan Pengguna:|Tugas Pengguna:)\s*/i, '')
     .trim();
-  return stripped.slice(0, 42) || 'Percakapan Antigravity';
+  t = t.replace(/^(?:tolong|bisa tolong|apakah kamu bisa|coba|tolong buatkan|buatkan|carikan|mohon)\s+/i, '').trim();
+  if (!t) return 'Percakapan Antigravity';
+  t = t.charAt(0).toUpperCase() + t.slice(1);
+  return t.slice(0, 42);
 }
 
 // Helper: Scan previous Antigravity and Local sessions
@@ -375,13 +376,14 @@ function handleSlashCommand(input) {
           }
         } catch(e) {}
 
-        const session = { id: Date.now(), isContinued: true, history: historyTurns };
+        const session = { id: Date.now(), title: match.title, isContinued: true, history: historyTurns };
         saveSession(session);
 
         return {
           type: 'session_resume',
           reply: `Ara ara~ Sesi [${match.title}] (${match.shortId}) berhasil di-resume sayang! Konteks aktif kembali, siap melanjutkan tugas apa?`,
           emotion: 'senyum_lembut',
+          title: match.title,
           history: historyTurns
         };
       }
@@ -395,6 +397,7 @@ function handleSlashCommand(input) {
       type: 'session_resume',
       reply: `Ara ara~ Selamat datang kembali sayang! Aku sudah me-resume sesi percakapan terakhir kita (${count} pesan tersimpan). Semua konteks aktif kembali, siap melanjutkan tugas apa hari ini?`,
       emotion: 'senyum_lembut',
+      title: session.title || 'Sesi Terakhir',
       history: session.history
     };
   }
@@ -410,6 +413,24 @@ function handleSlashCommand(input) {
       reply: 'Ara ara~ Sesi percakapan baru telah dimulai! Semua riwayat sebelumnya telah diarsipkan. Ada tugas baru apa yang ingin kita kerjakan bersama sayang?',
       emotion: 'senang',
       history: []
+    };
+  }
+
+  // /avatar [name]
+  if (lower.startsWith('/avatar')) {
+    const arg = trimmed.slice(7).trim().toLowerCase();
+    if (!arg || arg === 'list') {
+      return {
+        type: 'static',
+        reply: `Ara ara~ Berikut avatar visual yang siap digunakan:\n• <code>/avatar haru</code> - Akeno (Live2D Cubism 4)\n• <code>/avatar shizuku</code> - Shizuku (Live2D Cubism 2)\n• <code>/avatar seed-san</code> - Seed-san (3D VRM 1.0 Anime)\n\nKamu juga bisa memasang model .vrm atau Live2D baru ke folder <code>public/models/</code>!`,
+        emotion: 'senyum_lembut'
+      };
+    }
+    return {
+      type: 'avatar_switch',
+      target: arg,
+      reply: `Ara ara~ Beralih ke avatar <strong>${arg}</strong>! Tampilan model visual sedang diperbarui sayang~`,
+      emotion: 'senang'
     };
   }
 
@@ -604,6 +625,7 @@ app.get('/api/session', (req, res) => {
   const session = loadSavedSession();
   res.json({
     id: session.id,
+    title: session.title || 'Sesi Baru',
     isContinued: isSessionContinued,
     activeConversationId,
     history: session.history || []
@@ -615,10 +637,35 @@ app.get('/api/sessions', (req, res) => {
   res.json(list);
 });
 
+// Avatars Catalog API
+app.get('/api/avatars', (req, res) => {
+  const avatars = [
+    { id: 'haru', name: 'Akeno (Live2D Cubism 4)', type: 'live2d', path: 'models/haru/haru_greeter_t03.model3.json' },
+    { id: 'shizuku', name: 'Shizuku (Live2D Cubism 2)', type: 'live2d', path: 'models/shizuku/shizuku.model.json' },
+    { id: 'seed-san', name: 'Seed-san (3D VRM 1.0)', type: 'vrm', path: 'models/vrm/seed-san.vrm' }
+  ];
+  const vrmDir = path.join(__dirname, 'public', 'models', 'vrm');
+  if (fs.existsSync(vrmDir)) {
+    try {
+      const files = fs.readdirSync(vrmDir).filter(f => f.endsWith('.vrm') && f.toLowerCase() !== 'seed-san.vrm');
+      files.forEach(f => {
+        const id = path.parse(f).name.toLowerCase();
+        avatars.push({
+          id: id,
+          name: `${path.parse(f).name} (3D VRM)`,
+          type: 'vrm',
+          path: `models/vrm/${f}`
+        });
+      });
+    } catch (e) {}
+  }
+  res.json(avatars);
+});
+
 app.post('/api/session/new', (req, res) => {
   isSessionContinued = false;
   activeConversationId = null;
-  const newSession = { id: Date.now(), isContinued: false, history: [] };
+  const newSession = { id: Date.now(), title: 'Sesi Baru', isContinued: false, history: [] };
   saveSession(newSession);
   res.json({
     success: true,
@@ -643,6 +690,14 @@ app.post('/api/chat', async (req, res) => {
   }
 
   const currentSession = loadSavedSession();
+
+  // Dynamic Session Title based on context (matching Antigravity CLI convention)
+  if (!currentSession.title || currentSession.title === 'Percakapan Antigravity' || currentSession.title === 'Sesi Baru') {
+    const topic = cleanTitle(message);
+    if (topic && topic !== 'Percakapan Antigravity' && !topic.startsWith('/')) {
+      currentSession.title = topic;
+    }
+  }
 
   // Route 0: Power Management (Sleep, Restart, Shutdown)
   const powerAction = checkPowerIntent(message);
@@ -686,7 +741,8 @@ app.post('/api/chat', async (req, res) => {
       reply: cleanText,
       fullText: result,
       emotion: emotion,
-      isAgentic: true
+      isAgentic: true,
+      sessionTitle: currentSession.title || 'Sesi Baru'
     });
   }
 
@@ -702,6 +758,7 @@ app.post('/api/chat', async (req, res) => {
         emotion: slashAction.emotion,
         isAgentic: false,
         isResume: true,
+        sessionTitle: slashAction.title || 'Sesi Terakhir',
         history: slashAction.history
       });
     }
@@ -713,7 +770,24 @@ app.post('/api/chat', async (req, res) => {
         emotion: slashAction.emotion,
         isAgentic: false,
         isNew: true,
+        sessionTitle: 'Sesi Baru',
         history: []
+      });
+    }
+
+    if (slashAction.type === 'avatar_switch') {
+      currentSession.history.push({ role: 'user', text: message });
+      currentSession.history.push({ role: 'assistant', text: slashAction.reply, emotion: slashAction.emotion });
+      saveSession(currentSession);
+
+      return res.json({
+        reply: slashAction.reply,
+        fullText: `[${slashAction.emotion}] ${slashAction.reply}`,
+        emotion: slashAction.emotion,
+        isAgentic: false,
+        isAvatarSwitch: true,
+        targetAvatar: slashAction.target,
+        sessionTitle: currentSession.title || 'Sesi Baru'
       });
     }
 
@@ -726,7 +800,8 @@ app.post('/api/chat', async (req, res) => {
         reply: slashAction.reply,
         fullText: `[${slashAction.emotion}] ${slashAction.reply}`,
         emotion: slashAction.emotion,
-        isAgentic: false
+        isAgentic: false,
+        sessionTitle: currentSession.title || 'Sesi Baru'
       });
     }
 
@@ -748,7 +823,8 @@ app.post('/api/chat', async (req, res) => {
         reply: cleanText,
         fullText: result,
         emotion: emotion,
-        isAgentic: true
+        isAgentic: true,
+        sessionTitle: currentSession.title || 'Sesi Baru'
       });
     }
 
@@ -770,7 +846,8 @@ app.post('/api/chat', async (req, res) => {
         reply: cleanText,
         fullText: result,
         emotion: emotion,
-        isAgentic: true
+        isAgentic: true,
+        sessionTitle: currentSession.title || 'Sesi Baru'
       });
     }
   }
@@ -798,7 +875,8 @@ app.post('/api/chat', async (req, res) => {
         reply: cleanText,
         fullText: result,
         emotion: emotion,
-        isAgentic: true
+        isAgentic: true,
+        sessionTitle: currentSession.title || 'Sesi Baru'
       });
     } catch (e) {
       console.error('Antigravity CLI execution error:', e);
@@ -852,7 +930,8 @@ app.post('/api/chat', async (req, res) => {
         reply: cleanText,
         fullText: text,
         emotion: emotion,
-        isAgentic: false
+        isAgentic: false,
+        sessionTitle: currentSession.title || 'Sesi Baru'
       });
     } catch (err) {
       console.error('Gemini API Error, falling back to Antigravity CLI:', err.message);
@@ -866,7 +945,8 @@ app.post('/api/chat', async (req, res) => {
         reply: cleanText,
         fullText: agyRes,
         emotion: 'senyum_lembut',
-        isAgentic: true
+        isAgentic: true,
+        sessionTitle: currentSession.title || 'Sesi Baru'
       });
     }
   }
@@ -882,7 +962,8 @@ app.post('/api/chat', async (req, res) => {
     reply: cleanFallback,
     fullText: fallbackRes,
     emotion: 'senyum_lembut',
-    isAgentic: true
+    isAgentic: true,
+    sessionTitle: currentSession.title || 'Sesi Baru'
   });
 });
 

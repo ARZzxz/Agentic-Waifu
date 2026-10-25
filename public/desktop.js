@@ -20,9 +20,19 @@ let currentPosition = 'right_bottom';
 let sessionHistory = [];
 const defaultModelPath = 'models/haru/haru_greeter_t03.model3.json';
 
+// Avatars Catalog & Multi-Format Engine (Live2D & 3D VRM)
+let activeEngine = 'live2d'; // 'live2d' | 'vrm'
+let currentAvatarIndex = 0;
+const AVATARS = [
+  { id: 'haru', name: 'Akeno (Haru Live2D)', type: 'live2d', path: 'models/haru/haru_greeter_t03.model3.json' },
+  { id: 'shizuku', name: 'Shizuku (Live2D)', type: 'live2d', path: 'models/shizuku/shizuku.model.json' },
+  { id: 'seed-san', name: 'Seed-san (3D VRM)', type: 'vrm', path: 'models/vrm/seed-san.vrm' }
+];
+
 // DOM Elements
 const layout = document.getElementById('companion-layout');
 const canvas = document.getElementById('live2d-canvas');
+const vrmCanvas = document.getElementById('vrm-canvas');
 const speechBubble = document.getElementById('speech-bubble');
 const bubbleEmotion = document.getElementById('bubble-emotion');
 const bubbleText = document.getElementById('bubble-text');
@@ -40,6 +50,8 @@ const sessionPanel = document.getElementById('session-panel');
 const sessionHistoryEl = document.getElementById('session-history');
 const sessionInput = document.getElementById('session-input');
 const btnSessionSend = document.getElementById('btn-session-send');
+const sessionTopicText = document.getElementById('session-topic-text');
+const btnToggleAvatar = document.getElementById('btn-toggle-avatar');
 const processIndicator = document.getElementById('process-indicator');
 const processLabel = document.getElementById('process-label');
 const btnToggleWide = document.getElementById('btn-toggle-wide');
@@ -65,6 +77,7 @@ const EMOTIONS = {
 const SLASH_COMMANDS = [
   { cmd: '/resume', icon: '🔄', desc: 'Resume & masuk ke sesi percakapan terakhir', takesArg: false },
   { cmd: '/new', icon: '✨', desc: 'Mulai sesi percakapan & tugas baru', takesArg: false },
+  { cmd: '/avatar', icon: '👤', desc: 'Ganti avatar visual (Haru, Shizuku, Seed-san 3D VRM)', takesArg: true },
   { cmd: '/usage', icon: '⚡', desc: 'Cek sisa kuota model AI (Gemini & Claude)', takesArg: false },
   { cmd: '/help', icon: '📖', desc: 'Lihat daftar lengkap perintah & bantuan', takesArg: false },
   { cmd: '/plan', icon: '📋', desc: 'Buat rencana langkah terstruktur sebelum eksekusi', takesArg: true },
@@ -104,9 +117,24 @@ async function initPixi() {
   });
 
   PIXI.live2d.Live2DModel.registerTicker(PIXI.Ticker);
+  await loadLive2DModel(defaultModelPath);
+}
+
+async function loadLive2DModel(modelPath) {
+  if (!app) return;
+  if (currentModel) {
+    try {
+      app.stage.removeChild(currentModel);
+      currentModel.destroy();
+    } catch(e) {}
+    currentModel = null;
+  }
+
+  const height = 540;
+  const width = 260;
 
   try {
-    const model = await PIXI.live2d.Live2DModel.from(defaultModelPath, {
+    const model = await PIXI.live2d.Live2DModel.from(modelPath, {
       autoInteract: true
     });
 
@@ -120,10 +148,174 @@ async function initPixi() {
     model.x = width * 0.5;
     model.y = height * 0.48;
 
-    console.log('Live2D Model Loaded!');
+    console.log('Live2D Model Loaded:', modelPath);
   } catch (err) {
-    console.error('Failed to load model:', err);
+    console.error('Failed to load Live2D model:', err);
   }
+}
+
+// 1B. Initialize Three.js + VRM 3D Engine
+let vrmRenderer = null;
+let vrmScene = null;
+let vrmCamera = null;
+let currentVrm = null;
+let vrmClock = null;
+let vrmAnimationId = null;
+let vrmBlinkTimer = null;
+
+function initVrmEngine() {
+  if (vrmRenderer) return;
+  const stage = document.getElementById('avatar-stage');
+  const width = stage.clientWidth || 260;
+  const height = stage.clientHeight || 540;
+
+  vrmClock = new THREE.Clock();
+  vrmScene = new THREE.Scene();
+
+  vrmCamera = new THREE.PerspectiveCamera(30, width / height, 0.1, 20);
+  vrmCamera.position.set(0, 1.35, 1.15);
+  vrmCamera.lookAt(0, 1.28, 0);
+
+  vrmRenderer = new THREE.WebGLRenderer({
+    canvas: vrmCanvas,
+    alpha: true,
+    antialias: true
+  });
+  vrmRenderer.setSize(width, height);
+  vrmRenderer.setPixelRatio(window.devicePixelRatio || 1);
+  vrmRenderer.outputEncoding = THREE.sRGBEncoding;
+
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
+  vrmScene.add(ambientLight);
+
+  const dirLight = new THREE.DirectionalLight(0xffeedd, 0.95);
+  dirLight.position.set(1, 2, 1).normalize();
+  vrmScene.add(dirLight);
+
+  const backLight = new THREE.DirectionalLight(0xcceeff, 0.45);
+  backLight.position.set(-1, 1, -1).normalize();
+  vrmScene.add(backLight);
+
+  window.addEventListener('resize', onVrmResize);
+}
+
+function onVrmResize() {
+  if (!vrmRenderer || !vrmCamera) return;
+  const stage = document.getElementById('avatar-stage');
+  const width = stage.clientWidth || 260;
+  const height = stage.clientHeight || 540;
+  vrmCamera.aspect = width / height;
+  vrmCamera.updateProjectionMatrix();
+  vrmRenderer.setSize(width, height);
+}
+
+async function loadVrmModel(url) {
+  initVrmEngine();
+  const loader = new THREE.GLTFLoader();
+  loader.register((parser) => new THREE_VRM.VRMLoaderPlugin(parser));
+
+  return new Promise((resolve, reject) => {
+    loader.load(
+      url,
+      (gltf) => {
+        const vrm = gltf.userData.vrm;
+        if (!vrm) return reject(new Error('No VRM found in model file'));
+
+        if (currentVrm) {
+          vrmScene.remove(currentVrm.scene);
+          THREE_VRM.VRMUtils.deepDispose(currentVrm.scene);
+          currentVrm = null;
+        }
+
+        currentVrm = vrm;
+        vrmScene.add(vrm.scene);
+
+        // Turn around to face camera (+Z)
+        vrm.scene.rotation.y = Math.PI;
+
+        // Relax arms from T-pose
+        if (vrm.humanoid) {
+          try {
+            const leftUpperArm = vrm.humanoid.getNormalizedBoneNode('leftUpperArm');
+            const rightUpperArm = vrm.humanoid.getNormalizedBoneNode('rightUpperArm');
+            if (leftUpperArm) leftUpperArm.rotation.z = 1.15;
+            if (rightUpperArm) rightUpperArm.rotation.z = -1.15;
+          } catch(e) {}
+        }
+
+        startVrmLoop();
+        startVrmBlinking();
+        console.log('VRM Model Loaded successfully:', url);
+        resolve(vrm);
+      },
+      undefined,
+      (err) => {
+        console.error('Failed to load VRM model:', err);
+        reject(err);
+      }
+    );
+  });
+}
+
+function startVrmBlinking() {
+  if (vrmBlinkTimer) clearInterval(vrmBlinkTimer);
+  vrmBlinkTimer = setInterval(() => {
+    if (!currentVrm || !currentVrm.expressionManager) return;
+    currentVrm.expressionManager.setValue('blink', 1.0);
+    setTimeout(() => {
+      if (currentVrm && currentVrm.expressionManager) {
+        currentVrm.expressionManager.setValue('blink', 0.0);
+      }
+    }, 130);
+  }, 4000);
+}
+
+function startVrmLoop() {
+  if (vrmAnimationId) return;
+  function animate() {
+    vrmAnimationId = requestAnimationFrame(animate);
+    if (activeEngine !== 'vrm') return;
+    const delta = vrmClock ? vrmClock.getDelta() : 0.016;
+    const time = vrmClock ? vrmClock.getElapsedTime() : Date.now() * 0.001;
+
+    if (currentVrm) {
+      if (currentVrm.humanoid) {
+        try {
+          const chest = currentVrm.humanoid.getNormalizedBoneNode('chest') || currentVrm.humanoid.getNormalizedBoneNode('spine');
+          if (chest) {
+            chest.rotation.x = Math.sin(time * 1.5) * 0.02;
+          }
+        } catch(e) {}
+      }
+      currentVrm.update(delta);
+    }
+    if (vrmRenderer && vrmScene && vrmCamera) {
+      vrmRenderer.render(vrmScene, vrmCamera);
+    }
+  }
+  animate();
+}
+
+// 1C. Avatar Switcher (Live2D & 3D VRM)
+async function switchAvatar(targetId) {
+  const q = (targetId || '').toLowerCase().trim();
+  const av = AVATARS.find(a => a.id === q || a.name.toLowerCase().includes(q)) || AVATARS[0];
+  currentAvatarIndex = AVATARS.indexOf(av);
+  localStorage.setItem('preferred_avatar', av.id);
+
+  if (av.type === 'live2d') {
+    activeEngine = 'live2d';
+    if (vrmCanvas) vrmCanvas.style.display = 'none';
+    if (canvas) canvas.style.display = 'block';
+    await loadLive2DModel(av.path);
+  } else if (av.type === 'vrm') {
+    activeEngine = 'vrm';
+    if (canvas) canvas.style.display = 'none';
+    if (vrmCanvas) vrmCanvas.style.display = 'block';
+    await loadVrmModel(av.path);
+  }
+
+  showSpeechBubble(`Model visual berhasil beralih ke <strong>${av.name}</strong> (${av.type.toUpperCase()})!`, 'senyum_lembut');
 }
 
 // 2. Simulated Lip-Sync
@@ -155,13 +347,21 @@ function stopLipSync() {
 }
 
 function setMouth(val) {
-  if (!currentModel || !currentModel.internalModel) return;
-  try {
-    const core = currentModel.internalModel.coreModel;
-    if (core && core.setParameterValueById) {
-      core.setParameterValueById('ParamMouthOpenY', val);
+  if (activeEngine === 'live2d') {
+    if (!currentModel || !currentModel.internalModel) return;
+    try {
+      const core = currentModel.internalModel.coreModel;
+      if (core && core.setParameterValueById) {
+        core.setParameterValueById('ParamMouthOpenY', val);
+      }
+    } catch (e) {}
+  } else if (activeEngine === 'vrm') {
+    if (currentVrm && currentVrm.expressionManager) {
+      try {
+        currentVrm.expressionManager.setValue('aa', val);
+      } catch (e) {}
     }
-  } catch (e) {}
+  }
 }
 
 // 3. Simple Markdown Formatter for Code, Bold, & Codeblocks
@@ -227,14 +427,38 @@ function hideSpeechBubble() {
 
 function triggerAkenoVoice(text, emotionKey = 'senyum_lembut') {
   const emo = EMOTIONS[emotionKey] || EMOTIONS.senyum_lembut;
-  if (currentModel && emo.motion && currentModel.motion) {
+  if (activeEngine === 'live2d' && currentModel && emo.motion && currentModel.motion) {
     try { currentModel.motion(emo.motion); } catch (e) {}
+  } else if (activeEngine === 'vrm' && currentVrm && currentVrm.expressionManager) {
+    try {
+      currentVrm.expressionManager.setValue('happy', 0);
+      currentVrm.expressionManager.setValue('sad', 0);
+      currentVrm.expressionManager.setValue('relaxed', 0);
+      currentVrm.expressionManager.setValue('surprised', 0);
+
+      if (emotionKey === 'goda' || emotionKey === 'senang') {
+        currentVrm.expressionManager.setValue('happy', 0.85);
+      } else if (emotionKey === 'senyum_lembut') {
+        currentVrm.expressionManager.setValue('happy', 0.5);
+      } else if (emotionKey === 'khawatir') {
+        currentVrm.expressionManager.setValue('sad', 0.7);
+      } else if (emotionKey === 'fokus' || emotionKey === 'berpikir') {
+        currentVrm.expressionManager.setValue('relaxed', 0.5);
+      }
+    } catch (e) {}
   }
 
   startLipSync();
   const duration = Math.min(Math.max(text.length * 25, 2000), 10000);
   setTimeout(() => {
     stopLipSync();
+    if (activeEngine === 'vrm' && currentVrm && currentVrm.expressionManager) {
+      try {
+        currentVrm.expressionManager.setValue('happy', 0);
+        currentVrm.expressionManager.setValue('sad', 0);
+        currentVrm.expressionManager.setValue('relaxed', 0);
+      } catch (e) {}
+    }
   }, duration);
 }
 
@@ -363,6 +587,58 @@ async function loadAndShowResumeSessions(filterText = '') {
   slashAutocomplete.classList.remove('hidden');
 }
 
+function loadAndShowAvatarChoices(filterText = '') {
+  const choices = AVATARS.map(a => ({
+    cmd: `/avatar ${a.id}`,
+    id: a.id,
+    icon: a.type === 'vrm' ? '🧊' : '🎨',
+    desc: `${a.name} (${a.type.toUpperCase()})`
+  }));
+
+  const q = filterText.toLowerCase().trim();
+  filteredCommands = choices.filter(c => c.cmd.toLowerCase().includes(q) || c.desc.toLowerCase().includes(q) || c.id.toLowerCase().includes(q));
+
+  if (filteredCommands.length === 0) {
+    slashAutocomplete.classList.add('hidden');
+    return;
+  }
+
+  selectedAutocompleteIndex = 0;
+  slashList.innerHTML = '';
+
+  const headerEl = slashAutocomplete.querySelector('.slash-header');
+  if (headerEl) {
+    headerEl.innerHTML = `
+      <span><i class="fa-solid fa-user-astronaut"></i> Pilih Model Visual Avatar</span>
+      <span class="slash-hint">↑↓ pilih • Tab/Enter ganti</span>
+    `;
+  }
+
+  filteredCommands.forEach((item, index) => {
+    const el = document.createElement('div');
+    el.className = `slash-item ${index === 0 ? 'selected' : ''}`;
+    el.dataset.index = index;
+    el.innerHTML = `
+      <span class="slash-item-icon">${item.icon}</span>
+      <span class="slash-item-cmd">${item.cmd}</span>
+      <span class="slash-item-desc">${item.desc}</span>
+    `;
+
+    el.addEventListener('mouseenter', () => {
+      setAutocompleteSelected(index);
+    });
+
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      chooseAutocompleteCommand(item);
+    });
+
+    slashList.appendChild(el);
+  });
+
+  slashAutocomplete.classList.remove('hidden');
+}
+
 function renderAutocomplete(filterText = '') {
   const query = filterText.toLowerCase().trim();
   filteredCommands = SLASH_COMMANDS.filter(c => {
@@ -440,6 +716,14 @@ function chooseAutocompleteCommand(item) {
     return;
   }
 
+  // If user chooses /avatar from the main menu, open avatar choices submenu
+  if (item.cmd === '/avatar') {
+    sessionInput.value = '/avatar ';
+    sessionInput.focus();
+    loadAndShowAvatarChoices('');
+    return;
+  }
+
   // For all commands: autocomplete into input with trailing space, DO NOT auto-send!
   sessionInput.value = item.cmd + ' ';
   slashAutocomplete.classList.add('hidden');
@@ -490,10 +774,19 @@ async function sendMessage(inputOverride = null) {
     bubbleProcess.classList.add('hidden');
 
     if (res.ok) {
+      if (data.sessionTitle && sessionTopicText) {
+        sessionTopicText.textContent = data.sessionTitle;
+      }
+
+      if (data.isAvatarSwitch && data.targetAvatar) {
+        switchAvatar(data.targetAvatar);
+      }
+
       if (data.isNew) {
         // Clear history on /new
         sessionHistory = [];
         sessionHistoryEl.innerHTML = '';
+        if (sessionTopicText) sessionTopicText.textContent = 'Sesi Baru';
       } else if (data.isResume && data.history) {
         sessionHistory = data.history;
         sessionHistoryEl.innerHTML = '';
@@ -534,6 +827,15 @@ async function initSession() {
     const res = await fetch('/api/session');
     if (!res.ok) return;
     const session = await res.json();
+
+    if (session.title && sessionTopicText) {
+      sessionTopicText.textContent = session.title;
+    }
+
+    const savedAvatar = localStorage.getItem('preferred_avatar');
+    if (savedAvatar && savedAvatar !== 'haru') {
+      setTimeout(() => switchAvatar(savedAvatar), 500);
+    }
 
     if (session.history && session.history.length > 0) {
       sessionHistory = session.history;
@@ -610,6 +912,14 @@ function setupUIControls() {
     toggleWideMode();
   });
 
+  // Toggle Avatar (Live2D Haru / Shizuku / 3D VRM Seed-san)
+  if (btnToggleAvatar) {
+    btnToggleAvatar.addEventListener('click', () => {
+      currentAvatarIndex = (currentAvatarIndex + 1) % AVATARS.length;
+      switchAvatar(AVATARS[currentAvatarIndex].id);
+    });
+  }
+
   // Clear Session History (UI clear)
   btnClearSession.addEventListener('click', () => {
     sessionHistory = [];
@@ -634,6 +944,9 @@ function setupUIControls() {
     if (val === '/resume' || val.startsWith('/resume')) {
       const filter = val.startsWith('/resume') ? val.slice(7).trim() : '';
       loadAndShowResumeSessions(filter);
+    } else if (val === '/avatar' || val.startsWith('/avatar')) {
+      const filter = val.startsWith('/avatar') ? val.slice(7).trim() : '';
+      loadAndShowAvatarChoices(filter);
     } else if (val.startsWith('/')) {
       renderAutocomplete(val);
     } else {
@@ -693,6 +1006,11 @@ function setupUIControls() {
         sessionInput.focus();
         if (isMinimized) expandPanel();
         loadAndShowResumeSessions('');
+      } else if (cmd === '/avatar') {
+        sessionInput.value = '/avatar ';
+        sessionInput.focus();
+        if (isMinimized) expandPanel();
+        loadAndShowAvatarChoices('');
       } else if (cmd.endsWith(' ')) {
         sessionInput.value = cmd;
         sessionInput.focus();

@@ -11,6 +11,11 @@
   <script src="https://cdn.jsdelivr.net/npm/pixi.js@6.5.9/dist/browser/pixi.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/pixi-live2d-display@0.4.0/dist/index.min.js"></script>
 
+  <!-- Three.js & Three-VRM for 3D Avatars -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@2.0.6/lib/three-vrm.min.js"></script>
+
   <!-- Google Fonts & FontAwesome -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -21,9 +26,10 @@
 </head>
 <body class="desktop-mode">
   <div class="companion-layout is-minimized slim-mode" id="companion-layout">
-    <!-- Live2D Avatar Stage (Upper body, face & head are always clear!) -->
+    <!-- Live2D & 3D VRM Avatar Stage -->
     <div class="avatar-stage" id="avatar-stage">
       <canvas id="live2d-canvas"></canvas>
+      <canvas id="vrm-canvas" style="display: none;"></canvas>
     </div>
 
     <!-- Floating Speech Bubble (Appears above pill when Akeno speaks in minimized mode) -->
@@ -69,11 +75,17 @@
           <span class="status-badge" id="agent-badge">
             <i class="fa-solid fa-bolt"></i> Akeno • Antigravity
           </span>
+          <span class="session-topic-badge" id="session-topic-badge" title="Topik Sesi Saat Ini">
+            <i class="fa-solid fa-comment-dots"></i> <span id="session-topic-text">Sesi Baru</span>
+          </span>
           <span class="process-indicator hidden" id="process-indicator">
             <i class="fa-solid fa-circle-notch fa-spin"></i> <span id="process-label">Menjalankan tugas...</span>
           </span>
         </div>
         <div class="header-controls">
+          <button class="panel-btn" id="btn-toggle-avatar" title="Ganti Avatar (Live2D / 3D VRM)">
+            <i class="fa-solid fa-user-astronaut"></i>
+          </button>
           <button class="panel-btn" id="btn-toggle-wide" title="Perlebar (Wide) / Rampingkan Jendela">
             <i class="fa-solid fa-expand" id="wide-icon"></i>
           </button>
@@ -105,6 +117,7 @@
       <div class="quick-commands-bar" id="quick-commands">
         <button class="slash-chip" data-cmd="/resume">🔄 /resume</button>
         <button class="slash-chip" data-cmd="/new">✨ /new</button>
+        <button class="slash-chip" data-cmd="/avatar">👤 /avatar</button>
         <button class="slash-chip" data-cmd="/usage">⚡ /usage</button>
         <button class="slash-chip" data-cmd="/help">📖 /help</button>
         <button class="slash-chip" data-cmd="/plan ">📋 /plan</button>
