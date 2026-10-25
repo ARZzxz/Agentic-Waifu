@@ -220,6 +220,7 @@ function expandPanel() {
 function minimizePanel() {
   isMinimized = true;
   layout.classList.add('is-minimized');
+  minimizedLabel.textContent = 'Tanya Agent';
 
   // If in wide mode, revert to slim 260px when minimizing so no ghost area blocks desktop
   if (isWideMode) {
@@ -264,7 +265,6 @@ async function sendMessage(inputOverride = null) {
     bubbleProcess.classList.remove('hidden');
     bubbleProcessLabel.textContent = `⚡ [Antigravity] ${text.slice(0, 30)}...`;
     speechBubble.classList.remove('hidden');
-    minimizedLabel.textContent = `⚡ Mengeksekusi: ${text.slice(0, 25)}...`;
   }
 
   const processCard = appendHistoryItem('process', `⚡ [Antigravity] Mengeksekusi: ${text.slice(0, 45)}...`);
