@@ -188,14 +188,11 @@ function showSpeechBubble(text, emotionKey = 'senyum_lembut') {
   bubbleEmotion.innerHTML = `<i class="fa-solid ${emo.icon}"></i> Akeno • ${emo.label}`;
   bubbleText.innerHTML = formatMarkdown(text);
   speechBubble.classList.remove('hidden');
-
-  // Update label on minimized pill
-  const snippet = text.replace(/<[^>]+>/g, '').slice(0, 35) + '...';
-  minimizedLabel.textContent = snippet;
 }
 
 function hideSpeechBubble() {
   speechBubble.classList.add('hidden');
+  minimizedLabel.textContent = 'Tanya Agent';
 }
 
 function triggerAkenoVoice(text, emotionKey = 'senyum_lembut') {
