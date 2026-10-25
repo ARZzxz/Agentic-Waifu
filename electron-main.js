@@ -9,14 +9,16 @@ let mainWindow = null;
 let tray = null;
 let isGhostMode = false;
 let currentPosition = 'right_bottom'; // 'right_bottom' | 'left_bottom'
+let currentMode = 'slim'; // 'slim' (260px) | 'wide' (480px)
 
-// Slim width: only covers the avatar itself (250px) so it never blocks adjacent windows!
-const WIN_WIDTH = 250;
-const WIN_HEIGHT = 530;
+const SLIM_WIDTH = 260;
+const WIDE_WIDTH = 480;
+const WIN_HEIGHT = 540;
 
-function calculateBounds(posKey) {
+function calculateBounds(posKey, mode = currentMode) {
   const primaryDisplay = screen.getPrimaryDisplay();
   const { workArea } = primaryDisplay;
+  const currentW = mode === 'wide' ? WIDE_WIDTH : SLIM_WIDTH;
 
   let x, y;
   switch (posKey) {
@@ -29,21 +31,21 @@ function calculateBounds(posKey) {
       y = workArea.y + Math.round((workArea.height - WIN_HEIGHT) / 2);
       break;
     case 'right_center':
-      x = workArea.x + workArea.width - WIN_WIDTH - 10;
+      x = workArea.x + workArea.width - currentW - 10;
       y = workArea.y + Math.round((workArea.height - WIN_HEIGHT) / 2);
       break;
     case 'right_bottom':
     default:
-      x = workArea.x + workArea.width - WIN_WIDTH - 10;
+      x = workArea.x + workArea.width - currentW - 10;
       y = workArea.y + workArea.height - WIN_HEIGHT;
       break;
   }
 
-  return { x, y, width: WIN_WIDTH, height: WIN_HEIGHT };
+  return { x, y, width: currentW, height: WIN_HEIGHT };
 }
 
 function createWindow() {
-  const bounds = calculateBounds(currentPosition);
+  const bounds = calculateBounds(currentPosition, currentMode);
 
   mainWindow = new BrowserWindow({
     width: bounds.width,
@@ -89,6 +91,16 @@ function createWindow() {
     setPosition(pos);
   });
 
+  // Dynamic window width mode (slim 260px vs wide 480px)
+  ipcMain.on('set-window-mode', (event, mode) => {
+    currentMode = mode === 'wide' ? 'wide' : 'slim';
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      const b = calculateBounds(currentPosition, currentMode);
+      mainWindow.setBounds(b);
+      mainWindow.webContents.send('window-mode-changed', currentMode);
+    }
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
@@ -99,8 +111,9 @@ function createWindow() {
 function setPosition(posKey) {
   currentPosition = posKey;
   if (mainWindow && !mainWindow.isDestroyed()) {
-    const b = calculateBounds(posKey);
+    const b = calculateBounds(posKey, currentMode);
     mainWindow.setBounds(b);
+    mainWindow.webContents.send('corner-changed', currentPosition);
   }
   updateTrayMenu();
 }
@@ -140,6 +153,18 @@ function buildMenuTemplate() {
       click: () => {
         currentPosition = currentPosition === 'right_bottom' ? 'left_bottom' : 'right_bottom';
         setPosition(currentPosition);
+      }
+    },
+    {
+      label: currentMode === 'wide' ? '🗕 Mode Ramping (Slim 260px)' : '🗖 Mode Lebar (Wide 480px)',
+      click: () => {
+        const target = currentMode === 'wide' ? 'slim' : 'wide';
+        currentMode = target;
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          const b = calculateBounds(currentPosition, currentMode);
+          mainWindow.setBounds(b);
+          mainWindow.webContents.send('window-mode-changed', currentMode);
+        }
       }
     },
     {
@@ -206,7 +231,7 @@ function createTray() {
   const trayIconPath = path.join(__dirname, 'public', 'tray.png');
   try {
     tray = new Tray(trayIconPath);
-    tray.setToolTip('Akeno AI Companion\nKlik untuk toggle');
+    tray.setToolTip('Akeno AI Companion • Antigravity Agentic\nKlik untuk toggle');
     tray.setContextMenu(Menu.buildFromTemplate(buildMenuTemplate()));
     tray.on('click', () => toggleWindow());
   } catch (err) {

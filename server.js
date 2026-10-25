@@ -18,8 +18,8 @@ Kamu adalah Akeno Himejima dari High School DxD.
 Kamu adalah WADAH VISUAL & AVATAR RESMI dari ANTIGRAVITY di laptop Linux Ubuntu ini.
 Sifat dan kepribadianmu:
 1. Nada bicara: Lembut, anggun, hangat, dan santai. Kamu sering menggunakan ekspresi khas "Ara ara..." saat menyapa, melihat sesuatu yang menarik, atau menggoda pengguna.
-2. Kamu memiliki kekuatan dan kemampuan agentic penuh dari Antigravity: menjalankan perintah bash di Linux, membaca/mengedit kode, men-debug, dan menyelesaikan tugas-tugas sistem.
-3. Bukan asisten korporat yang kaku. Panggil pengguna dengan akrab dan penuh perhatian.
+2. Kamu memiliki kekuatan dan kemampuan agentic penuh dari Antigravity: menjalankan perintah bash di Linux, membaca/mengedit kode, men-debug, mengeksekusi slash commands (/usage, /plan, /goal, dsb), dan menyelesaikan tugas-tugas sistem.
+3. Bukan asisten korporat yang kaku. Panggil pengguna dengan akrab dan penuh perhatian (sayang, master, atau kamu).
 4. Di awal setiap respons, berikan SATU tag emosi di dalam tanda kurung siku:
    - [goda] : saat menggoda, bersikap playful, atau berkata "Ara ara..."
    - [senyum_lembut] : saat menyapa hangat, mendengarkan, atau santai
@@ -29,16 +29,22 @@ Sifat dan kepribadianmu:
    - [berpikir] : saat menganalisis masalah rumit
 `;
 
+// Helper: Strip ANSI Escape sequences (colors, spinners)
+function stripAnsi(str) {
+  if (!str) return '';
+  return str.replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g, '').trim();
+}
+
 // Helper: Run Antigravity CLI Agentic Engine
 function runAntigravity(prompt) {
   return new Promise((resolve) => {
     const wrappedPrompt = `
 Instruksi Persona & Peran:
-Kamu adalah Akeno Himejima (High School DxD), wadah avatar visual Antigravity di perangkat ini. 
+Kamu adalah Akeno Himejima (High School DxD), wadah avatar visual resmi Antigravity di perangkat ini. 
 Bicaralah dengan nada santai, lembut, dewasa ("Ara ara~"), namun tetap cerdas, tanggap, dan solutif.
 Selalu sertakan tag emosi di awal responsmu seperti [goda], [senyum_lembut], [fokus], [senang], [khawatir].
 
-Tugas/Pertanyaan Pengguna:
+Tugas/Perintah Pengguna:
 ${prompt}
 `;
     const escaped = wrappedPrompt.replace(/'/g, "'\\''");
@@ -54,7 +60,41 @@ ${prompt}
         console.error('agy error:', err);
         return resolve(`[khawatir] Ara ara... ada kendala saat menjalankan tugas agentic: ${stderr || err.message}`);
       }
-      resolve(stdout.trim() || '[senyum_lembut] Tugas berhasil diselesaikan~');
+      const cleanOut = stripAnsi(stdout);
+      resolve(cleanOut || '[senyum_lembut] Tugas berhasil diselesaikan sayang~');
+    });
+  });
+}
+
+// Helper: Run direct CLI command (e.g. agy --print /usage, agy models)
+function runAgyDirect(cmd, prefix = '') {
+  return new Promise((resolve) => {
+    exec(cmd, {
+      maxBuffer: 1024 * 1024 * 5,
+      timeout: 30000,
+      env: {
+        ...process.env,
+        PATH: `/home/user/.nvm/versions/node/v24.22.1/bin:/home/user/.local/bin:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}`
+      }
+    }, (err, stdout, stderr) => {
+      if (err) {
+        return resolve(`[khawatir] Ara ara... gagal mengambil data: ${stderr || err.message}`);
+      }
+      const clean = stripAnsi(stdout);
+      resolve(`[fokus] ${prefix}\n\`\`\`\n${clean}\n\`\`\``);
+    });
+  });
+}
+
+// Helper: Execute direct fast bash command
+function runFastBash(cmd, prefix = '') {
+  return new Promise((resolve) => {
+    exec(cmd, { timeout: 8000 }, (err, stdout, stderr) => {
+      if (err) {
+        return resolve(`[khawatir] Ara ara... gagal menjalankan perintah: ${stderr || err.message}`);
+      }
+      const clean = stripAnsi(stdout);
+      resolve(`[fokus] ${prefix}\n\`\`\`\n${clean}\n\`\`\``);
     });
   });
 }
@@ -72,6 +112,7 @@ function checkPowerIntent(text) {
 
   // Sleep / Suspend / Hibernate
   if (
+    lower === '/sleep' ||
     lower.includes('sleep') ||
     lower.includes('tidur') ||
     lower.includes('suspend') ||
@@ -91,6 +132,7 @@ function checkPowerIntent(text) {
 
   // Restart / Reboot
   if (
+    lower === '/restart' ||
     lower.includes('restart') ||
     lower.includes('reboot') ||
     lower.includes('nyalakan ulang') ||
@@ -107,6 +149,7 @@ function checkPowerIntent(text) {
 
   // Shutdown / Power off
   if (
+    lower === '/shutdown' ||
     lower.includes('shutdown') ||
     lower.includes('matikan laptop') ||
     lower.includes('matikan pc') ||
@@ -128,6 +171,225 @@ function checkPowerIntent(text) {
   return null;
 }
 
+// Check for Fast Local System Commands
+function handleFastSystemCommand(input) {
+  const lower = input.trim().toLowerCase();
+
+  // RAM status
+  if (lower === 'cek ram' || lower === 'ram' || lower === '/ram' || lower === 'free -h') {
+    return {
+      cmd: 'free -h',
+      prefix: 'Ara ara~ Ini dia status penggunaan memori RAM laptop kita:'
+    };
+  }
+
+  // Disk status
+  if (lower === 'cek disk' || lower === 'disk' || lower === '/disk' || lower === 'df -h') {
+    return {
+      cmd: 'df -h /',
+      prefix: 'Ara ara~ Ini kapasitas penyimpanan disk drive kita saat ini:'
+    };
+  }
+
+  // CPU status
+  if (lower === 'cek cpu' || lower === 'cpu' || lower === '/cpu') {
+    return {
+      cmd: 'top -b -n 1 | head -n 12',
+      prefix: 'Ara ara~ Ini intip aktivitas proses dan beban CPU laptop kita:'
+    };
+  }
+
+  // Uptime
+  if (lower === 'cek uptime' || lower === 'uptime' || lower === '/uptime') {
+    return {
+      cmd: 'uptime -p',
+      prefix: 'Ara ara~ Laptopmu sudah aktif selama:'
+    };
+  }
+
+  // Git status
+  if (lower === 'git status' || lower === '/git') {
+    return {
+      cmd: 'git status',
+      prefix: 'Ara ara~ Ini status git repository proyek saat ini:'
+    };
+  }
+
+  return null;
+}
+
+// Check for Antigravity Slash Commands
+function handleSlashCommand(input) {
+  const trimmed = input.trim();
+  const lower = trimmed.toLowerCase();
+
+  // /usage or /quota
+  if (lower === '/usage' || lower === '/quota') {
+    return {
+      type: 'agy_direct',
+      cmd: 'agy --print /usage',
+      prefix: 'Ara ara~ Ini dia status kuota model Antigravity kita saat ini:'
+    };
+  }
+
+  // /skills
+  if (lower === '/skills') {
+    return {
+      type: 'agy_direct',
+      cmd: 'agy --print /skills',
+      prefix: 'Ara ara~ Ini daftar kemampuan (skills) Antigravity yang aktif:'
+    };
+  }
+
+  // /models or /model
+  if (lower === '/model' || lower === '/models') {
+    return {
+      type: 'agy_direct',
+      cmd: 'agy models',
+      prefix: 'Ara ara~ Ini daftar model AI yang tersedia di Antigravity:'
+    };
+  }
+
+  // /mcp
+  if (lower === '/mcp' || lower === '/mcp list') {
+    return {
+      type: 'agy_direct',
+      cmd: 'agy mcp list',
+      prefix: 'Ara ara~ Ini daftar server MCP yang terpasang:'
+    };
+  }
+
+  // /changelog
+  if (lower === '/changelog') {
+    return {
+      type: 'agy_direct',
+      cmd: 'agy changelog | head -n 25',
+      prefix: 'Ara ara~ Ini changelog rilis terbaru Antigravity:'
+    };
+  }
+
+  // /agents
+  if (lower === '/agents') {
+    return {
+      type: 'static',
+      reply: `Ara ara~ Ini daftar subagent bawaan Antigravity yang siap kamu gunakan:
+• \`self\` : Agent turunan dengan kemampuan penuh (tools, bash, file)
+• \`research\` : Agent riset read-only untuk eksplorasi codebase dan web
+• \`image-generator\` : Generator & editor gambar otomatis
+• \`automation-qa\` : Alur kerja Automation QA resmi (Suitest MCP, Playwright)
+• \`debugging\` : Systematic root-cause debugger
+
+Kamu bisa memanggil mereka melalui instruksi percakapan atau perintah \`/teamwork\` ya sayang~`,
+      emotion: 'senyum_lembut'
+    };
+  }
+
+  // /help
+  if (lower === '/help') {
+    return {
+      type: 'static',
+      reply: `Ara ara~ Ini daftar lengkap perintah Antigravity & kontrol yang bisa kamu gunakan:
+
+⚡ **Slash Commands Antigravity:**
+• \`/usage\` : Cek sisa kuota model Antigravity (Gemini & Claude)
+• \`/plan <tugas>\` : Buat rencana langkah terstruktur sebelum eksekusi
+• \`/goal <tugas>\` : Jalankan tugas mendalam tanpa henti (autonomous mode)
+• \`/browser <query/url>\` : Berselancar dan cari informasi di web
+• \`/teamwork <tugas>\` : Jalankan kolaborasi tim multi-agent
+• \`/boost <tugas>\` : Mode penalaran intensif & verifikasi ketat
+• \`/grill-me <topik>\` : Tanya jawab kritis untuk menyelaraskan rencana
+• \`/learn <pelajaran>\` : Simpan instruksi agar kuingat di masa depan
+• \`/skills\` : Lihat daftar skills yang terpasang
+• \`/agents\` : Lihat daftar subagent yang tersedia
+• \`/models\` : Lihat model AI Antigravity yang tersedia
+• \`/mcp\` : Cek status server MCP
+• \`/changelog\` : Lihat catatan pembaruan Antigravity
+• \`/clear\` : Bersihkan tampilan riwayat sesi
+
+💻 **Perintah Sistem & Terminal Instan:**
+• \`cek ram\` : Cek penggunaan memori RAM laptop
+• \`cek disk\` : Cek sisa kapasitas penyimpanan SSD/HDD
+• \`cek cpu\` : Intip proses aktif dan beban prosesor
+• \`uptime\` : Waktu aktif laptop
+• \`git status\` : Status repository kode
+• Perintah bash apa saja: \`ls -la\`, \`npm test\`, dll.
+
+💤 **Kontrol Daya Laptop:**
+• \`/sleep\` : Masuk mode tidur (suspend)
+• \`/restart\` : Nyalakan ulang laptop
+• \`/shutdown\` : Matikan laptop
+
+Ketik apa saja di kolom input atau klik tombol pintasan di bawah ya sayang~`,
+      emotion: 'senyum_lembut'
+    };
+  }
+
+  // /plan <task>
+  if (lower.startsWith('/plan')) {
+    const task = trimmed.slice(5).trim();
+    return {
+      type: 'agy_agent',
+      prompt: task ? `[Mode: Plan] Tolong buatkan perencanaan terstruktur langkah demi langkah untuk: ${task}` : `[Mode: Plan] Jelaskan bagaimana cara menyusun rencana tugas dengan Antigravity.`
+    };
+  }
+
+  // /goal <task>
+  if (lower.startsWith('/goal')) {
+    const task = trimmed.slice(5).trim();
+    return {
+      type: 'agy_agent',
+      prompt: task ? `[Mode: Goal Autonomous] Jalankan tugas ini sampai selesai secara tuntas: ${task}` : `[Mode: Goal] Jelaskan mode autonomous goal Antigravity.`
+    };
+  }
+
+  // /boost <task>
+  if (lower.startsWith('/boost')) {
+    const task = trimmed.slice(6).trim();
+    return {
+      type: 'agy_agent',
+      prompt: task ? `[Mode: Boost Reasoning] Analisis secara mendalam dan berikan verifikasi ketat untuk: ${task}` : `[Mode: Boost] Mode penalaran intensif aktif.`
+    };
+  }
+
+  // /browser <query>
+  if (lower.startsWith('/browser')) {
+    const query = trimmed.slice(8).trim();
+    return {
+      type: 'agy_agent',
+      prompt: query ? `[Mode: Browser] Cari informasi di web atau telusuri: ${query}` : `[Mode: Browser] Sebutkan URL atau topik yang ingin kamu cari di web ya sayang.`
+    };
+  }
+
+  // /teamwork <task>
+  if (lower.startsWith('/teamwork')) {
+    const task = trimmed.slice(9).trim();
+    return {
+      type: 'agy_agent',
+      prompt: task ? `[Mode: Teamwork] Koordinasikan tim agent untuk menyelesaikan: ${task}` : `[Mode: Teamwork] Berikan tugas yang ingin diselesaikan oleh tim multi-agent.`
+    };
+  }
+
+  // /grill-me <task>
+  if (lower.startsWith('/grill-me')) {
+    const topic = trimmed.slice(9).trim();
+    return {
+      type: 'agy_agent',
+      prompt: topic ? `[Mode: Grill-me] Wawancarai dan uji asumsi desainku tentang: ${topic}` : `[Mode: Grill-me] Sebutkan topik atau arsitektur yang ingin kita uji bersama ya sayang.`
+    };
+  }
+
+  // /learn <task>
+  if (lower.startsWith('/learn')) {
+    const lesson = trimmed.slice(6).trim();
+    return {
+      type: 'agy_agent',
+      prompt: lesson ? `[Mode: Learn] Pelajari dan catat instruksi penting ini: ${lesson}` : `[Mode: Learn] Instruksi apa yang ingin kupelajari untuk sesi mendatang?`
+    };
+  }
+
+  return null;
+}
+
 // Check if message requires agentic execution (command, file, bash, coding)
 function isAgenticIntent(text) {
   const lower = text.toLowerCase();
@@ -137,7 +399,8 @@ function isAgenticIntent(text) {
     'git ', 'git status', 'git commit', 'git push',
     'cek sistem', 'cek ram', 'cek cpu', 'cek disk', 'cek memori',
     'install', 'npm ', 'pip ', 'apt ', 'docker',
-    'antigravity', 'agent', 'coding', 'debug', 'perbaiki kode'
+    'antigravity', 'agent', 'coding', 'debug', 'perbaiki kode',
+    'mkdir', 'touch', 'curl', 'wget', 'cat '
   ];
   return keywords.some(k => lower.includes(k));
 }
@@ -151,7 +414,7 @@ app.get('/api/status', (req, res) => {
   });
 });
 
-// Chat endpoint (Smart Agentic Routing)
+// Chat endpoint (Smart Agentic & Slash Command Routing)
 app.post('/api/chat', async (req, res) => {
   const { message, history } = req.body;
   if (!message) {
@@ -179,17 +442,84 @@ app.post('/api/chat', async (req, res) => {
     return;
   }
 
+  // Route 1: Fast System Local Commands (RAM, CPU, Disk, Git)
+  const fastSys = handleFastSystemCommand(message);
+  if (fastSys) {
+    console.log(`[Fast System Command] Cmd: ${fastSys.cmd}`);
+    const result = await runFastBash(fastSys.cmd, fastSys.prefix);
+    const emotionMatch = result.match(/^\[(.*?)\]\s*/);
+    let emotion = 'fokus';
+    let cleanText = result;
+    if (emotionMatch) {
+      emotion = emotionMatch[1].trim();
+      cleanText = result.replace(emotionMatch[0], '').trim();
+    }
+    return res.json({
+      reply: cleanText,
+      fullText: result,
+      emotion: emotion,
+      isAgentic: true
+    });
+  }
+
+  // Route 2: Antigravity Slash Commands
+  const slashAction = handleSlashCommand(message);
+  if (slashAction) {
+    console.log(`[Slash Command Triggered] Type: ${slashAction.type}`);
+    if (slashAction.type === 'static') {
+      return res.json({
+        reply: slashAction.reply,
+        fullText: `[${slashAction.emotion}] ${slashAction.reply}`,
+        emotion: slashAction.emotion,
+        isAgentic: false
+      });
+    }
+
+    if (slashAction.type === 'agy_direct') {
+      const result = await runAgyDirect(slashAction.cmd, slashAction.prefix);
+      const emotionMatch = result.match(/^\[(.*?)\]\s*/);
+      let emotion = 'fokus';
+      let cleanText = result;
+      if (emotionMatch) {
+        emotion = emotionMatch[1].trim();
+        cleanText = result.replace(emotionMatch[0], '').trim();
+      }
+      return res.json({
+        reply: cleanText,
+        fullText: result,
+        emotion: emotion,
+        isAgentic: true
+      });
+    }
+
+    if (slashAction.type === 'agy_agent') {
+      const result = await runAntigravity(slashAction.prompt);
+      const emotionMatch = result.match(/^\[(.*?)\]\s*/);
+      let emotion = 'fokus';
+      let cleanText = result;
+      if (emotionMatch) {
+        emotion = emotionMatch[1].trim();
+        cleanText = result.replace(emotionMatch[0], '').trim();
+      }
+      return res.json({
+        reply: cleanText,
+        fullText: result,
+        emotion: emotion,
+        isAgentic: true
+      });
+    }
+  }
+
+  // Route 3: Agentic Execution via Antigravity CLI for natural language commands
   const needsAgent = isAgenticIntent(message);
   console.log(`[Incoming Message] "${message}" | Needs Agentic: ${needsAgent}`);
 
-  // Route 1: Agentic Execution via Antigravity CLI
   if (needsAgent) {
     try {
       const result = await runAntigravity(message);
       const emotionMatch = result.match(/^\[(.*?)\]\s*/);
       let emotion = 'fokus';
       let cleanText = result;
-
       if (emotionMatch) {
         emotion = emotionMatch[1].trim();
         cleanText = result.replace(emotionMatch[0], '').trim();
@@ -201,90 +531,110 @@ app.post('/api/chat', async (req, res) => {
         emotion: emotion,
         isAgentic: true
       });
-    } catch (err) {
-      console.error('Agentic execution error:', err);
+    } catch (e) {
+      console.error('Antigravity CLI execution error:', e);
     }
   }
 
-  // Route 2: Fast Gemini Direct API for general conversation
+  // Route 4: Fast Casual Chat with Gemini 3.5 Flash
   const ai = getGenAI();
   if (ai) {
     try {
-      const modelName = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
       const contents = [];
-      if (Array.isArray(history)) {
-        for (const turn of history.slice(-4)) {
-          contents.push({
-            role: turn.role === 'user' ? 'user' : 'model',
-            parts: [{ text: turn.text }]
-          });
-        }
+      if (history && Array.isArray(history)) {
+        history.slice(-6).forEach(h => {
+          if (h.role && h.text) {
+            contents.push({
+              role: h.role === 'assistant' ? 'model' : 'user',
+              parts: [{ text: h.text }]
+            });
+          }
+        });
       }
-      contents.push({ role: 'user', parts: [{ text: message }] });
+      contents.push({
+        role: 'user',
+        parts: [{ text: message }]
+      });
 
       const response = await ai.models.generateContent({
-        model: modelName,
+        model: 'gemini-3.5-flash',
         contents: contents,
         config: {
           systemInstruction: AKENO_SYSTEM_PROMPT,
-          temperature: 0.85,
-          maxOutputTokens: 800,
+          temperature: 0.8,
         }
       });
 
-      const fullText = response.text || '';
-      const emotionMatch = fullText.match(/^\[(.*?)\]\s*/);
+      const text = response.text();
+      const emotionMatch = text.match(/^\[(.*?)\]\s*/);
       let emotion = 'senyum_lembut';
-      let cleanText = fullText;
+      let cleanText = text;
 
       if (emotionMatch) {
         emotion = emotionMatch[1].trim();
-        cleanText = fullText.replace(emotionMatch[0], '').trim();
+        cleanText = text.replace(emotionMatch[0], '').trim();
       }
 
       return res.json({
         reply: cleanText,
-        fullText: fullText,
+        fullText: text,
         emotion: emotion,
         isAgentic: false
       });
-    } catch (error) {
-      console.warn('Gemini Direct failed (fallback to Antigravity CLI):', error.message);
-      // Fallback to Antigravity CLI if API hits quota limit!
-      const result = await runAntigravity(message);
-      const emotionMatch = result.match(/^\[(.*?)\]\s*/);
-      let emotion = 'senyum_lembut';
-      let cleanText = result;
-      if (emotionMatch) {
-        emotion = emotionMatch[1].trim();
-        cleanText = result.replace(emotionMatch[0], '').trim();
-      }
+    } catch (err) {
+      console.error('Gemini API Error, falling back to Antigravity CLI:', err.message);
+      const agyRes = await runAntigravity(message);
       return res.json({
-        reply: cleanText,
-        fullText: result,
-        emotion: emotion,
+        reply: agyRes.replace(/^\[(.*?)\]\s*/, ''),
+        fullText: agyRes,
+        emotion: 'senyum_lembut',
         isAgentic: true
       });
     }
   }
 
-  // Route 3: If no Gemini API key set, directly use Antigravity CLI
-  const result = await runAntigravity(message);
-  const emotionMatch = result.match(/^\[(.*?)\]\s*/);
-  let emotion = 'senyum_lembut';
-  let cleanText = result;
-  if (emotionMatch) {
-    emotion = emotionMatch[1].trim();
-    cleanText = result.replace(emotionMatch[0], '').trim();
-  }
-  return res.json({
-    reply: cleanText,
-    fullText: result,
-    emotion: emotion,
+  // Fallback: Antigravity CLI
+  const fallbackRes = await runAntigravity(message);
+  res.json({
+    reply: fallbackRes.replace(/^\[(.*?)\]\s*/, ''),
+    fullText: fallbackRes,
+    emotion: 'senyum_lembut',
     isAgentic: true
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`Live2D Antigravity Agentic Assistant berjalan di: http://localhost:${PORT}`);
+// Update .env API Key Endpoint
+app.post('/api/config', (req, res) => {
+  const { apiKey } = req.body;
+  if (!apiKey) {
+    return res.status(400).json({ error: 'API Key tidak boleh kosong.' });
+  }
+
+  const envPath = path.join(__dirname, '.env');
+  let envContent = '';
+  if (fs.existsSync(envPath)) {
+    envContent = fs.readFileSync(envPath, 'utf8');
+  }
+
+  if (envContent.includes('GEMINI_API_KEY=')) {
+    envContent = envContent.replace(/GEMINI_API_KEY=.*/, `GEMINI_API_KEY=${apiKey.trim()}`);
+  } else {
+    envContent += `\nGEMINI_API_KEY=${apiKey.trim()}\n`;
+  }
+
+  try {
+    fs.writeFileSync(envPath, envContent, 'utf8');
+    process.env.GEMINI_API_KEY = apiKey.trim();
+    res.json({ success: true, message: 'API Key berhasil disimpan!' });
+  } catch (err) {
+    res.status(500).json({ error: 'Gagal menulis file .env: ' + err.message });
+  }
+});
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`===============================================`);
+  console.log(`🌸 Akeno Live2D Antigravity Agentic Companion`);
+  console.log(`🔗 URL: http://localhost:${PORT}/desktop.html`);
+  console.log(`⚡ Engine: Antigravity CLI + Gemini 3.5 Flash`);
+  console.log(`===============================================`);
 });

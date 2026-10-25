@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Akeno Floating Pet</title>
+  <title>Akeno Floating Pet - Antigravity Agentic</title>
   
   <!-- Live2D SDK Dependencies -->
   <script src="https://cdn.jsdelivr.net/gh/dylanNew/live2d/webgl/Live2D/lib/live2d.min.js"></script>
@@ -14,41 +14,115 @@
   <!-- Google Fonts & FontAwesome -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
   <link rel="stylesheet" href="desktop.css">
 </head>
 <body class="desktop-mode">
-  <div class="companion-layout" id="companion-layout">
-    <!-- Live2D Avatar Stage (Upper body, face & head are completely clear!) -->
+  <div class="companion-layout is-minimized slim-mode" id="companion-layout">
+    <!-- Live2D Avatar Stage (Upper body, face & head are always clear!) -->
     <div class="avatar-stage" id="avatar-stage">
       <canvas id="live2d-canvas"></canvas>
     </div>
 
-    <!-- Speech Response Card (Positioned directly over lower body / thighs area) -->
-    <div class="speech-box hidden" id="speech-box">
-      <div class="speech-header">
-        <span class="speech-tag" id="speech-tag">
-          <i class="fa-solid fa-heart"></i> Akeno
+    <!-- Floating Speech Bubble (Appears above pill when Akeno speaks in minimized mode) -->
+    <div class="speech-bubble" id="speech-bubble">
+      <div class="speech-bubble-header">
+        <span class="bubble-tag" id="bubble-emotion">
+          <i class="fa-solid fa-heart"></i> Akeno • Ara ara~
         </span>
-        <button class="speech-close-btn" id="btn-close-speech" title="Tutup response">&times;</button>
+        <div class="bubble-actions">
+          <button class="bubble-btn" id="btn-bubble-expand" title="Buka Riwayat & Detail Proses">
+            <i class="fa-solid fa-clock-rotate-left"></i> Riwayat
+          </button>
+          <button class="bubble-btn close" id="btn-bubble-close" title="Tutup Bubble">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
       </div>
-      <div class="speech-content" id="speech-content"></div>
+      <div class="speech-bubble-body" id="bubble-text">
+        Ara ara~ Selamat datang! Aku adalah wadah visual Antigravity di laptopmu. Ketik <code>/help</code> atau klik tombol di bawah ya sayang~
+      </div>
+      <div class="bubble-process-bar hidden" id="bubble-process">
+        <i class="fa-solid fa-circle-notch fa-spin"></i>
+        <span id="bubble-process-label">Menjalankan tugas Antigravity...</span>
+      </div>
     </div>
 
-    <!-- Bottom Chat Bar (Compact Pill + Dodge button) -->
-    <div class="chat-bottom-bar" id="chat-bar">
-      <div class="chat-pill" id="chat-pill">
-        <i class="fa-solid fa-comment-dots"></i> <span>Tanya Akeno...</span>
+    <!-- Minimized Floating Bar (Always present in minimized mode at bottom) -->
+    <div class="minimized-bar" id="minimized-bar">
+      <div class="minimized-pill" id="btn-expand-panel" title="Klik untuk membuka riwayat chat dan proses Antigravity">
+        <i class="fa-solid fa-comment-dots"></i>
+        <span id="minimized-label">Tanya Akeno • Antigravity...</span>
       </div>
-      <button class="dodge-btn" id="btn-dodge" title="Pindah Sisi (Dodge Kiri / Kanan)">
+      <button class="dodge-mini-btn" id="btn-dodge-mini" title="Pindah Sisi (Dodge Kiri/Kanan)">
         <i class="fa-solid fa-arrows-left-right"></i>
       </button>
+    </div>
 
-      <div class="chat-expanded-box" id="chat-box">
-        <input type="text" id="mini-input" placeholder="Ketik pesan..." autocomplete="off">
-        <button id="btn-mini-send"><i class="fa-solid fa-paper-plane"></i></button>
+    <!-- Agentic Session & Chat Panel (Full History & Process Viewer) -->
+    <div class="session-panel" id="session-panel">
+      <!-- Panel Header -->
+      <div class="session-header">
+        <div class="header-status">
+          <span class="status-badge" id="agent-badge">
+            <i class="fa-solid fa-bolt"></i> Akeno • Antigravity
+          </span>
+          <span class="process-indicator hidden" id="process-indicator">
+            <i class="fa-solid fa-circle-notch fa-spin"></i> <span id="process-label">Menjalankan tugas...</span>
+          </span>
+        </div>
+        <div class="header-controls">
+          <button class="panel-btn" id="btn-toggle-wide" title="Perlebar (Wide) / Rampingkan Jendela">
+            <i class="fa-solid fa-expand" id="wide-icon"></i>
+          </button>
+          <button class="panel-btn" id="btn-clear-session" title="Bersihkan Riwayat Sesi">
+            <i class="fa-solid fa-trash-can"></i>
+          </button>
+          <button class="panel-btn" id="btn-dodge" title="Pindah Sisi (Dodge Kiri/Kanan)">
+            <i class="fa-solid fa-arrows-left-right"></i>
+          </button>
+          <button class="panel-btn close-btn" id="btn-minimize-panel" title="Minimize Panel ke Floating Bubble">
+            <i class="fa-solid fa-minus"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Scrollable Multi-Turn Chat & Process History -->
+      <div class="session-history" id="session-history">
+        <!-- Initial greeting -->
+        <div class="history-card akeno">
+          <div class="card-meta"><i class="fa-solid fa-heart"></i> Akeno Himejima • Ara ara~</div>
+          <div class="card-body">
+            Ara ara~ Selamat datang! Aku adalah wadah visual resmi Antigravity. Aku bisa mengeksekusi coding, perintah terminal, slash commands seperti <code>/usage</code>, <code>/plan</code>, <code>/goal</code>, atau kontrol daya laptopmu. 
+            Ketik <code>/help</code> untuk melihat semua kemampuanku ya sayang~
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Slash Command Chips -->
+      <div class="quick-commands-bar" id="quick-commands">
+        <button class="slash-chip" data-cmd="/usage">⚡ /usage</button>
+        <button class="slash-chip" data-cmd="/help">📖 /help</button>
+        <button class="slash-chip" data-cmd="/plan ">📋 /plan</button>
+        <button class="slash-chip" data-cmd="/goal ">🎯 /goal</button>
+        <button class="slash-chip" data-cmd="/browser ">🌐 /browser</button>
+        <button class="slash-chip" data-cmd="/teamwork ">🤝 /teamwork</button>
+        <button class="slash-chip" data-cmd="/boost ">🚀 /boost</button>
+        <button class="slash-chip" data-cmd="/skills">🛠️ /skills</button>
+        <button class="slash-chip" data-cmd="/agents">🤖 /agents</button>
+        <button class="slash-chip" data-cmd="/models">🧠 /models</button>
+        <button class="slash-chip" data-cmd="/mcp">🔌 /mcp</button>
+        <button class="slash-chip" data-cmd="cek ram">💻 RAM</button>
+        <button class="slash-chip" data-cmd="cek disk">💾 Disk</button>
+        <button class="slash-chip" data-cmd="git status">🐙 Git</button>
+      </div>
+
+      <!-- Input Bar Area -->
+      <div class="session-input-wrapper">
+        <input type="text" id="session-input" placeholder="Perintah bash, /slash, atau chat..." autocomplete="off">
+        <button id="btn-session-send" title="Kirim"><i class="fa-solid fa-paper-plane"></i></button>
       </div>
     </div>
   </div>

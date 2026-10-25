@@ -14,37 +14,54 @@ let currentModel = null;
 let isSpeaking = false;
 let mouthAnimationId = null;
 let isGhostMode = false;
-let chatHistory = [];
-let autoHideSpeechTimer = null;
+let isWideMode = false;
+let isMinimized = true; // Starts minimized for clean desktop companion feel
+let currentPosition = 'right_bottom';
+let sessionHistory = [];
 const defaultModelPath = 'models/haru/haru_greeter_t03.model3.json';
 
 // DOM Elements
 const layout = document.getElementById('companion-layout');
 const canvas = document.getElementById('live2d-canvas');
-const speechBox = document.getElementById('speech-box');
-const speechTag = document.getElementById('speech-tag');
-const speechContent = document.getElementById('speech-content');
-const btnCloseSpeech = document.getElementById('btn-close-speech');
-const chatPill = document.getElementById('chat-pill');
-const chatBox = document.getElementById('chat-box');
+const speechBubble = document.getElementById('speech-bubble');
+const bubbleEmotion = document.getElementById('bubble-emotion');
+const bubbleText = document.getElementById('bubble-text');
+const bubbleProcess = document.getElementById('bubble-process');
+const bubbleProcessLabel = document.getElementById('bubble-process-label');
+const btnBubbleExpand = document.getElementById('btn-bubble-expand');
+const btnBubbleClose = document.getElementById('btn-bubble-close');
+
+const minimizedBar = document.getElementById('minimized-bar');
+const minimizedLabel = document.getElementById('minimized-label');
+const btnExpandPanel = document.getElementById('btn-expand-panel');
+const btnDodgeMini = document.getElementById('btn-dodge-mini');
+
+const sessionPanel = document.getElementById('session-panel');
+const sessionHistoryEl = document.getElementById('session-history');
+const sessionInput = document.getElementById('session-input');
+const btnSessionSend = document.getElementById('btn-session-send');
+const processIndicator = document.getElementById('process-indicator');
+const processLabel = document.getElementById('process-label');
+const btnToggleWide = document.getElementById('btn-toggle-wide');
+const wideIcon = document.getElementById('wide-icon');
+const btnClearSession = document.getElementById('btn-clear-session');
 const btnDodge = document.getElementById('btn-dodge');
-const miniInput = document.getElementById('mini-input');
-const btnMiniSend = document.getElementById('btn-mini-send');
+const btnMinimizePanel = document.getElementById('btn-minimize-panel');
 
 // Emotion configurations
 const EMOTIONS = {
   goda: { label: 'Ara ara~', icon: 'fa-heart-circle-bolt', motion: 'Tap' },
-  senyum_lembut: { label: 'Akeno', icon: 'fa-heart', motion: 'Idle' },
+  senyum_lembut: { label: 'Senyum', icon: 'fa-heart', motion: 'Idle' },
   fokus: { label: 'Fokus', icon: 'fa-magnifying-glass', motion: 'Idle' },
   senang: { label: 'Senang', icon: 'fa-face-smile-wink', motion: 'Tap' },
   khawatir: { label: 'Khawatir', icon: 'fa-hand-holding-heart', motion: 'Idle' },
   berpikir: { label: 'Berpikir...', icon: 'fa-brain', motion: 'Idle' }
 };
 
-// 1. Initialize PixiJS for Slim 250px Avatar Column
+// 1. Initialize PixiJS for Slim/Wide Canvas
 async function initPixi() {
-  const width = 250;
-  const height = 530;
+  const width = 260;
+  const height = 540;
 
   app = new PIXI.Application({
     view: canvas,
@@ -66,14 +83,14 @@ async function initPixi() {
     currentModel = model;
     app.stage.addChild(model);
 
-    // Scale and position model: Face & chest high up, thighs lower down
+    // Scale and position model: Face & chest high up
     const scale = (height / model.height) * 0.95;
     model.scale.set(scale);
     model.anchor.set(0.5, 0.5);
     model.x = width * 0.5;
-    model.y = height * 0.50;
+    model.y = height * 0.48;
 
-    console.log('Slim Live2D Model Ready!');
+    console.log('Live2D Model Loaded!');
   } catch (err) {
     console.error('Failed to load model:', err);
   }
@@ -117,131 +134,290 @@ function setMouth(val) {
   } catch (e) {}
 }
 
-// 3. Speech Box & Typewriter
-function speak(text, emotionKey = 'senyum_lembut') {
-  if (autoHideSpeechTimer) clearTimeout(autoHideSpeechTimer);
+// 3. Simple Markdown Formatter for Code, Bold, & Codeblocks
+function formatMarkdown(text) {
+  if (!text) return '';
+  let escaped = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 
+  // Triple backticks code block
+  escaped = escaped.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+  // Inline code
+  escaped = escaped.replace(/`([^`]+)`/g, '<code>$1</code>');
+  // Bold
+  escaped = escaped.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  // Newlines
+  escaped = escaped.replace(/\n/g, '<br>');
+
+  return escaped;
+}
+
+// 4. Append to Session History
+function appendHistoryItem(role, content, emotionKey = null, isProcess = false) {
+  const card = document.createElement('div');
+  card.className = `history-card ${role} ${isProcess ? 'process' : ''}`;
+
+  if (role === 'akeno') {
+    const emo = EMOTIONS[emotionKey] || EMOTIONS.senyum_lembut;
+    card.innerHTML = `
+      <div class="card-meta"><i class="fa-solid ${emo.icon}"></i> Akeno • ${emo.label}</div>
+      <div class="card-body">${formatMarkdown(content)}</div>
+    `;
+  } else if (role === 'user') {
+    card.innerHTML = `
+      <div class="card-meta"><i class="fa-solid fa-user"></i> Kamu</div>
+      <div class="card-body">${formatMarkdown(content)}</div>
+    `;
+  } else if (role === 'process') {
+    card.innerHTML = `
+      <i class="fa-solid fa-circle-notch fa-spin"></i>
+      <span>${formatMarkdown(content)}</span>
+    `;
+  }
+
+  sessionHistoryEl.appendChild(card);
+  sessionHistoryEl.scrollTop = sessionHistoryEl.scrollHeight;
+  return card;
+}
+
+// 5. Speech Bubble & Voice
+function showSpeechBubble(text, emotionKey = 'senyum_lembut') {
   const emo = EMOTIONS[emotionKey] || EMOTIONS.senyum_lembut;
-  speechTag.innerHTML = `<i class="fa-solid ${emo.icon}"></i> ${emo.label}`;
+  bubbleEmotion.innerHTML = `<i class="fa-solid ${emo.icon}"></i> Akeno • ${emo.label}`;
+  bubbleText.innerHTML = formatMarkdown(text);
+  speechBubble.classList.remove('hidden');
 
+  // Update label on minimized pill
+  const snippet = text.replace(/<[^>]+>/g, '').slice(0, 35) + '...';
+  minimizedLabel.textContent = snippet;
+}
+
+function hideSpeechBubble() {
+  speechBubble.classList.add('hidden');
+}
+
+function triggerAkenoVoice(text, emotionKey = 'senyum_lembut') {
+  const emo = EMOTIONS[emotionKey] || EMOTIONS.senyum_lembut;
   if (currentModel && emo.motion && currentModel.motion) {
     try { currentModel.motion(emo.motion); } catch (e) {}
   }
 
-  speechBox.classList.remove('hidden');
-  speechContent.textContent = '';
   startLipSync();
-
-  let index = 0;
-  const timer = setInterval(() => {
-    if (index < text.length) {
-      speechContent.textContent += text.charAt(index);
-      speechContent.scrollTop = speechContent.scrollHeight;
-      index++;
-    } else {
-      clearInterval(timer);
-      stopLipSync();
-      // Auto-hide after 8 seconds of idle
-      autoHideSpeechTimer = setTimeout(() => {
-        if (!isSpeaking) speechBox.classList.add('hidden');
-      }, 8000);
-    }
-  }, 22);
+  const duration = Math.min(Math.max(text.length * 25, 2000), 10000);
+  setTimeout(() => {
+    stopLipSync();
+  }, duration);
 }
 
-// Dismiss speech response by clicking close 'x'
-function hideSpeech() {
-  speechBox.classList.add('hidden');
-  stopLipSync();
-  if (autoHideSpeechTimer) clearTimeout(autoHideSpeechTimer);
+// 6. Panel Expand & Minimize Controls
+function expandPanel() {
+  isMinimized = false;
+  layout.classList.remove('is-minimized');
+  hideSpeechBubble();
+  sessionInput.focus();
+  sessionHistoryEl.scrollTop = sessionHistoryEl.scrollHeight;
 }
 
-btnCloseSpeech.addEventListener('click', (e) => {
-  e.stopPropagation();
-  hideSpeech();
-});
+function minimizePanel() {
+  isMinimized = true;
+  layout.classList.add('is-minimized');
 
-// 4. Ghost Mode Handler (From Tray)
-if (ipcRenderer) {
-  ipcRenderer.on('toggle-ghost-state', (event, active) => {
-    isGhostMode = active;
-    if (isGhostMode) {
-      layout.classList.add('ghost-mode');
-    } else {
-      layout.classList.remove('ghost-mode');
-    }
-  });
-}
-
-// 5. Dodge Corner Button
-btnDodge.addEventListener('click', (e) => {
-  e.stopPropagation();
-  if (ipcRenderer) {
-    ipcRenderer.send('dodge-corner');
+  // If in wide mode, revert to slim 260px when minimizing so no ghost area blocks desktop
+  if (isWideMode) {
+    toggleWideMode(false);
   }
-});
+}
 
-// 6. Mini Chat Logic
-chatPill.addEventListener('click', () => {
-  chatPill.style.display = 'none';
-  btnDodge.style.display = 'none';
-  chatBox.classList.add('active');
-  miniInput.focus();
-});
+function toggleWideMode(forceState = null) {
+  isWideMode = forceState !== null ? forceState : !isWideMode;
 
-document.addEventListener('click', (e) => {
-  if (!e.target.closest('.chat-bottom-bar') && chatBox.classList.contains('active')) {
-    chatBox.classList.remove('active');
-    chatPill.style.display = 'flex';
-    btnDodge.style.display = 'flex';
+  if (isWideMode) {
+    expandPanel();
+    layout.classList.add('wide-mode');
+    layout.classList.remove('slim-mode');
+    wideIcon.className = 'fa-solid fa-compress';
+    if (ipcRenderer) ipcRenderer.send('set-window-mode', 'wide');
+  } else {
+    layout.classList.add('slim-mode');
+    layout.classList.remove('wide-mode');
+    wideIcon.className = 'fa-solid fa-expand';
+    if (ipcRenderer) ipcRenderer.send('set-window-mode', 'slim');
   }
-});
+}
 
-async function sendMiniMessage() {
-  const text = miniInput.value.trim();
+// 7. Send Command or Chat Message
+async function sendMessage(inputOverride = null) {
+  const text = (inputOverride || sessionInput.value).trim();
   if (!text) return;
 
-  miniInput.value = '';
-  chatBox.classList.remove('active');
-  chatPill.style.display = 'flex';
-  btnDodge.style.display = 'flex';
+  if (!inputOverride) sessionInput.value = '';
 
-  speak('Ara ara... tunggu sebentar ya, aku sedang mengeksekusinya di sistemmu...', 'fokus');
+  // Append user message
+  appendHistoryItem('user', text);
+  sessionHistory.push({ role: 'user', text });
+
+  // Show live process indicator
+  processIndicator.classList.remove('hidden');
+  processLabel.textContent = 'Menjalankan tugas Antigravity...';
+
+  // Also show on minimized bubble if minimized
+  if (isMinimized) {
+    bubbleProcess.classList.remove('hidden');
+    bubbleProcessLabel.textContent = `⚡ [Antigravity] ${text.slice(0, 30)}...`;
+    speechBubble.classList.remove('hidden');
+    minimizedLabel.textContent = `⚡ Mengeksekusi: ${text.slice(0, 25)}...`;
+  }
+
+  const processCard = appendHistoryItem('process', `⚡ [Antigravity] Mengeksekusi: ${text.slice(0, 45)}...`);
+
+  if (currentModel && currentModel.motion) {
+    try { currentModel.motion('Idle'); } catch (e) {}
+  }
+
+  btnSessionSend.disabled = true;
 
   try {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text, history: chatHistory })
+      body: JSON.stringify({ message: text, history: sessionHistory })
     });
+
     const data = await res.json();
+    processCard.remove();
+    processIndicator.classList.add('hidden');
+    bubbleProcess.classList.add('hidden');
+
     if (res.ok) {
-      chatHistory.push({ role: 'user', text });
-      chatHistory.push({ role: 'assistant', text: data.reply });
-      speak(data.reply, data.emotion || 'senyum_lembut');
+      sessionHistory.push({ role: 'assistant', text: data.reply });
+      appendHistoryItem('akeno', data.reply, data.emotion || 'senyum_lembut');
+      triggerAkenoVoice(data.reply, data.emotion || 'senyum_lembut');
+
+      if (isMinimized) {
+        showSpeechBubble(data.reply, data.emotion || 'senyum_lembut');
+      }
     } else {
-      speak('Ara ara... ada kendala: ' + data.error, 'khawatir');
+      const errMsg = `Ara ara... ada kendala: ${data.error}`;
+      appendHistoryItem('akeno', errMsg, 'khawatir');
+      triggerAkenoVoice(errMsg, 'khawatir');
+      if (isMinimized) showSpeechBubble(errMsg, 'khawatir');
     }
   } catch (err) {
-    speak('Koneksi terputus: ' + err.message, 'khawatir');
+    processCard.remove();
+    processIndicator.classList.add('hidden');
+    bubbleProcess.classList.add('hidden');
+    const errMsg = `Koneksi terputus: ${err.message}`;
+    appendHistoryItem('akeno', errMsg, 'khawatir');
+    triggerAkenoVoice(errMsg, 'khawatir');
+    if (isMinimized) showSpeechBubble(errMsg, 'khawatir');
+  } finally {
+    btnSessionSend.disabled = false;
   }
 }
 
-btnMiniSend.addEventListener('click', (e) => {
-  e.stopPropagation();
-  sendMiniMessage();
-});
+// 8. Event Listeners & Panel Controls
+function setupUIControls() {
+  // Minimize Panel to Floating Pill
+  btnMinimizePanel.addEventListener('click', () => {
+    minimizePanel();
+  });
 
-miniInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
-    e.preventDefault();
-    sendMiniMessage();
+  // Expand Panel from Minimized Pill
+  btnExpandPanel.addEventListener('click', () => {
+    expandPanel();
+  });
+
+  // Expand Panel from Speech Bubble
+  btnBubbleExpand.addEventListener('click', () => {
+    expandPanel();
+  });
+
+  // Close Speech Bubble
+  btnBubbleClose.addEventListener('click', () => {
+    hideSpeechBubble();
+  });
+
+  // Toggle Wide / Slim Mode
+  btnToggleWide.addEventListener('click', () => {
+    toggleWideMode();
+  });
+
+  // Clear Session History
+  btnClearSession.addEventListener('click', () => {
+    sessionHistory = [];
+    sessionHistoryEl.innerHTML = '';
+    appendHistoryItem('akeno', 'Ara ara~ Riwayat sesi ini sudah kubersihkan. Ada tugas baru apa lagi yang bisa kubantu sayang?', 'senang');
+  });
+
+  // Dodge Corner
+  const doDodge = (e) => {
+    e.stopPropagation();
+    if (ipcRenderer) ipcRenderer.send('dodge-corner');
+  };
+  btnDodge.addEventListener('click', doDodge);
+  btnDodgeMini.addEventListener('click', doDodge);
+
+  // Send button & enter key
+  btnSessionSend.addEventListener('click', () => sendMessage());
+  sessionInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+
+  // Quick Slash Command Chips
+  document.querySelectorAll('.slash-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const cmd = chip.dataset.cmd;
+      if (cmd.endsWith(' ')) {
+        sessionInput.value = cmd;
+        sessionInput.focus();
+        if (isMinimized) expandPanel();
+      } else {
+        sendMessage(cmd);
+      }
+    });
+  });
+
+  // IPC listeners from main Electron process
+  if (ipcRenderer) {
+    ipcRenderer.on('toggle-ghost-state', (event, active) => {
+      isGhostMode = active;
+      if (isGhostMode) layout.classList.add('ghost-mode');
+      else layout.classList.remove('ghost-mode');
+    });
+
+    ipcRenderer.on('corner-changed', (event, pos) => {
+      currentPosition = pos;
+      if (pos.startsWith('left')) {
+        layout.classList.add('pos-left');
+        layout.classList.remove('pos-right');
+      } else {
+        layout.classList.add('pos-right');
+        layout.classList.remove('pos-left');
+      }
+    });
+
+    ipcRenderer.on('window-mode-changed', (event, mode) => {
+      isWideMode = mode === 'wide';
+      if (isWideMode) {
+        layout.classList.add('wide-mode');
+        layout.classList.remove('slim-mode');
+        wideIcon.className = 'fa-solid fa-compress';
+      } else {
+        layout.classList.add('slim-mode');
+        layout.classList.remove('wide-mode');
+        wideIcon.className = 'fa-solid fa-expand';
+      }
+    });
   }
-});
+}
 
-// Bootstrap
+// Bootstrap Application
 window.addEventListener('DOMContentLoaded', () => {
   initPixi();
-  // Brief welcome greeting, auto-hides after 5s
-  speak('Ara ara~ Selamat datang! Aku siap menemanimu bekerja di sini~', 'senyum_lembut');
+  setupUIControls();
 });
