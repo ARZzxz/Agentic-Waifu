@@ -725,8 +725,8 @@ function setupEventListeners() {
     if (activeEngine === 'live2d' && currentModel) {
       positionModel(currentModel);
     } else if (activeEngine === 'vrm' && currentVrm && vrmCamera) {
-      vrmCamera.position.set(0, 1.10, 2.3);
-      vrmCamera.lookAt(0, 0.95, 0);
+      vrmCamera.position.set(0, 0.95, 2.6);
+      vrmCamera.lookAt(0, 0.85, 0);
       currentVrm.scene.rotation.set(0, 0, 0);
     }
   });
