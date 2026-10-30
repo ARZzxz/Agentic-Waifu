@@ -1,0 +1,29 @@
+{
+  "projectName": "Waifu Gemini Assistant",
+  "projectPath": ".",
+  "baseUrl": "http://localhost:3000",
+  "mode": "frontend",
+  "output": "suitest-output/blackbox",
+  "ui": {
+    "mode": "blackbox",
+    "targetUrl": "http://localhost:3000",
+    "crawl": {
+      "maxDepth": 2,
+      "maxRoutes": 5,
+      "safeMode": true
+    }
+  },
+  "publish": {
+    "enabled": true,
+    "api_url": "http://localhost:4000",
+    "token": "sk_suitest_1pRHsi-ce3-I2TuXizVooIaQVf93GA7l-ESrboix8ys",
+    "workspace_id": "yzhglocycpkwsijca8wb2bux",
+    "project_id": "lexmqxln9gykp1dy1gg0wa1w",
+    "suite_name": "Waifu Assistant Web Suite",
+    "recreate": false,
+    "projectId": "lexmqxln9gykp1dy1gg0wa1w"
+  },
+  "server": {
+    "autostart": false
+  }
+}

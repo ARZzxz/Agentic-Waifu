@@ -1,0 +1,17 @@
+[
+  {
+    "id": "TC001",
+    "title": "app_loads_successfully",
+    "file": "TC001_app_loads_successfully.py"
+  },
+  {
+    "id": "TC002",
+    "title": "no_critical_console_errors_on_load",
+    "file": "TC002_no_critical_console_errors_on_load.py"
+  },
+  {
+    "id": "TC003",
+    "title": "main_navigation_does_not_crash",
+    "file": "TC003_main_navigation_does_not_crash.py"
+  }
+]

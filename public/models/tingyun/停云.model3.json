@@ -1,0 +1,28 @@
+{
+	"Version": 3,
+	"FileReferences": {
+		"Moc": "停云.moc3",
+		"Textures": [
+			"停云.4096/texture_00.png"
+		],
+		"Physics": "停云.physics3.json",
+		"DisplayInfo": "停云.cdi3.json"
+	},
+	"Groups": [
+		{
+			"Target": "Parameter",
+			"Name": "EyeBlink",
+			"Ids": [
+				"ParamEyeROpen",
+				"ParamEyeRSmile",
+				"ParamEyeLOpen",
+				"ParamEyeLSmile"
+			]
+		},
+		{
+			"Target": "Parameter",
+			"Name": "LipSync",
+			"Ids": []
+		}
+	]
+}

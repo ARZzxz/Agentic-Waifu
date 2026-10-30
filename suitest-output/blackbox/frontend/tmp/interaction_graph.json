@@ -1,0 +1,110 @@
+{
+  "baseUrl": "http://localhost:3000",
+  "nodes": [
+    {
+      "id": "page:/login",
+      "kind": "page",
+      "route": "/login",
+      "pattern": "blank",
+      "protected": false,
+      "title": "Error",
+      "blank": true,
+      "consoleErrors": 0,
+      "networkErrors": 0
+    },
+    {
+      "id": "page:/",
+      "kind": "page",
+      "route": "/",
+      "pattern": "unknown",
+      "protected": false,
+      "title": "Professional AI Assistant",
+      "blank": false,
+      "consoleErrors": 0,
+      "networkErrors": 0
+    },
+    {
+      "id": "action:/:btn-reset-pos",
+      "kind": "action",
+      "route": "/",
+      "label": "btn-reset-pos",
+      "locator": "page.locator(\"#btn-reset-pos\")"
+    },
+    {
+      "id": "action:/:btn-toggle-bubble",
+      "kind": "action",
+      "route": "/",
+      "label": "btn-toggle-bubble",
+      "locator": "page.locator(\"#btn-toggle-bubble\")"
+    },
+    {
+      "id": "action:/:btn-settings",
+      "kind": "action",
+      "route": "/",
+      "label": "btn-settings",
+      "locator": "page.locator(\"#btn-settings\")"
+    },
+    {
+      "id": "action:/:\ud83d\udcac Mulai Percakapan",
+      "kind": "action",
+      "route": "/",
+      "label": "\ud83d\udcac Mulai Percakapan",
+      "locator": "page.get_by_role(\"button\", name=\"\ud83d\udcac Mulai Percakapan\").first"
+    },
+    {
+      "id": "action:/:\ud83d\udcca Butuh Analisis",
+      "kind": "action",
+      "route": "/",
+      "label": "\ud83d\udcca Butuh Analisis",
+      "locator": "page.get_by_role(\"button\", name=\"\ud83d\udcca Butuh Analisis\").first"
+    },
+    {
+      "id": "action:/:\ud83d\udcbb Review Kode",
+      "kind": "action",
+      "route": "/",
+      "label": "\ud83d\udcbb Review Kode",
+      "locator": "page.get_by_role(\"button\", name=\"\ud83d\udcbb Review Kode\").first"
+    }
+  ],
+  "edges": [
+    {
+      "from": "page:/",
+      "to": "action:/:btn-reset-pos",
+      "kind": "navigation"
+    },
+    {
+      "from": "page:/",
+      "to": "action:/:btn-toggle-bubble",
+      "kind": "navigation"
+    },
+    {
+      "from": "page:/",
+      "to": "action:/:btn-settings",
+      "kind": "navigation"
+    },
+    {
+      "from": "page:/",
+      "to": "action:/:\ud83d\udcac Mulai Percakapan",
+      "kind": "navigation"
+    },
+    {
+      "from": "page:/",
+      "to": "action:/:\ud83d\udcca Butuh Analisis",
+      "kind": "navigation"
+    },
+    {
+      "from": "page:/",
+      "to": "action:/:\ud83d\udcbb Review Kode",
+      "kind": "navigation"
+    }
+  ],
+  "login": null,
+  "loginProbe": {
+    "attempted": false,
+    "success": false,
+    "landed_route": "",
+    "error_locator": "",
+    "detail": ""
+  },
+  "skippedRoutes": []
+}

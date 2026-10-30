@@ -1,0 +1,74 @@
+[
+  {
+    "id": "TC001",
+    "title": "app_loads_successfully",
+    "description": "The application root responds and renders visible content.",
+    "category": "Smoke",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Open the application root"
+      },
+      {
+        "type": "assertion",
+        "description": "Body has visible content and a title"
+      }
+    ],
+    "source_ref": "bb:smoke /",
+    "automation_file": "TC001_app_loads_successfully.py",
+    "tags": [],
+    "testingApproach": "BLACK_BOX",
+    "testLevel": "E2E",
+    "framework": "",
+    "strategyRef": ""
+  },
+  {
+    "id": "TC002",
+    "title": "no_critical_console_errors_on_load",
+    "description": "Loading the app produces no uncaught exceptions or console errors.",
+    "category": "Smoke",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Open the application root with a console listener"
+      },
+      {
+        "type": "assertion",
+        "description": "No console.error / uncaught exceptions were emitted"
+      }
+    ],
+    "source_ref": "bb:smoke /",
+    "automation_file": "TC002_no_critical_console_errors_on_load.py",
+    "tags": [],
+    "testingApproach": "BLACK_BOX",
+    "testLevel": "E2E",
+    "framework": "",
+    "strategyRef": ""
+  },
+  {
+    "id": "TC003",
+    "title": "main_navigation_does_not_crash",
+    "description": "Every discovered route loads without a blank page or crash.",
+    "category": "Navigation",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Visit every discovered route"
+      },
+      {
+        "type": "assertion",
+        "description": "Each route renders visible content"
+      }
+    ],
+    "source_ref": "bb:navigation /",
+    "automation_file": "TC003_main_navigation_does_not_crash.py",
+    "tags": [],
+    "testingApproach": "BLACK_BOX",
+    "testLevel": "E2E",
+    "framework": "",
+    "strategyRef": ""
+  }
+]

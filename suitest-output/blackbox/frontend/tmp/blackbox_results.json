@@ -1,0 +1,107 @@
+[
+  {
+    "testId": "TC001",
+    "title": "app_loads_successfully",
+    "description": "The application root responds and renders visible content.",
+    "status": "PASSED",
+    "durationMs": 6526,
+    "error": "",
+    "automationFile": "TC001_app_loads_successfully.py",
+    "artifacts": [
+      "/home/user/Waifu Gemini Assistant/suitest-output/blackbox/frontend/tmp/videos/TC001/page@8544c54e1bf9dc2a2ceb20b033b1f290.webm"
+    ],
+    "video": "/home/user/Waifu Gemini Assistant/suitest-output/blackbox/frontend/tmp/videos/TC001/page@8544c54e1bf9dc2a2ceb20b033b1f290.webm",
+    "screenshot": "",
+    "steps": [
+      {
+        "index": 1,
+        "type": "action",
+        "description": "Open the application root",
+        "status": "PASSED"
+      },
+      {
+        "index": 2,
+        "type": "assertion",
+        "description": "Body has visible content",
+        "status": "PASSED"
+      }
+    ],
+    "testingApproach": "BLACK_BOX",
+    "testLevel": "E2E",
+    "framework": ""
+  },
+  {
+    "testId": "TC002",
+    "title": "no_critical_console_errors_on_load",
+    "description": "Loading the app produces no uncaught exceptions or console errors.",
+    "status": "PASSED",
+    "durationMs": 7169,
+    "error": "",
+    "automationFile": "TC002_no_critical_console_errors_on_load.py",
+    "artifacts": [
+      "/home/user/Waifu Gemini Assistant/suitest-output/blackbox/frontend/tmp/videos/TC002/page@eb655356f6f0d5dd9004fe63daa5e715.webm"
+    ],
+    "video": "/home/user/Waifu Gemini Assistant/suitest-output/blackbox/frontend/tmp/videos/TC002/page@eb655356f6f0d5dd9004fe63daa5e715.webm",
+    "screenshot": "",
+    "steps": [
+      {
+        "index": 1,
+        "type": "action",
+        "description": "Open the application root",
+        "status": "PASSED"
+      },
+      {
+        "index": 2,
+        "type": "assertion",
+        "description": "No critical console errors",
+        "status": "PASSED"
+      }
+    ],
+    "testingApproach": "BLACK_BOX",
+    "testLevel": "E2E",
+    "framework": ""
+  },
+  {
+    "testId": "TC003",
+    "title": "main_navigation_does_not_crash",
+    "description": "Every discovered route loads without a blank page or crash.",
+    "status": "PASSED",
+    "durationMs": 9868,
+    "error": "",
+    "automationFile": "TC003_main_navigation_does_not_crash.py",
+    "artifacts": [
+      "/home/user/Waifu Gemini Assistant/suitest-output/blackbox/frontend/tmp/videos/TC003/page@622f4d3f2c3842d90ee61ba4dc060181.webm"
+    ],
+    "video": "/home/user/Waifu Gemini Assistant/suitest-output/blackbox/frontend/tmp/videos/TC003/page@622f4d3f2c3842d90ee61ba4dc060181.webm",
+    "screenshot": "",
+    "steps": [
+      {
+        "index": 1,
+        "type": "action",
+        "description": "Open /login",
+        "status": "PASSED"
+      },
+      {
+        "index": 2,
+        "type": "assertion",
+        "description": "/login renders content and no crash text",
+        "status": "PASSED"
+      },
+      {
+        "index": 3,
+        "type": "action",
+        "description": "Open /",
+        "status": "PASSED"
+      },
+      {
+        "index": 4,
+        "type": "assertion",
+        "description": "/ renders content and no crash text",
+        "status": "PASSED"
+      }
+    ],
+    "testingApproach": "BLACK_BOX",
+    "testLevel": "E2E",
+    "framework": ""
+  }
+]
