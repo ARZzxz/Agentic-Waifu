@@ -524,25 +524,28 @@ async function loadAndShowResumeSessions(filterText = '') {
       id: 'latest',
       isSession: true,
       icon: '⚡',
-      title: 'Sesi Paling Baru (Terakhir)',
-      desc: 'Lanjutkan sesi percakapan paling baru'
+      title: 'Lanjutkan Sesi Terakhir',
+      meta: 'Sesi percakapan paling baru aktif'
     }
   ];
 
   sessions.forEach(s => {
     choices.push({
-      cmd: `/resume ${s.shortId}`,
+      cmd: `/resume "${s.title}"`,
       id: s.shortId,
       fullId: s.id,
       isSession: true,
       icon: '💬',
       title: s.title,
-      desc: `[${s.time}] ${s.title} (${s.count} pesan)`
+      meta: `${s.time} • ${s.count} pesan`
     });
   });
 
   filteredCommands = choices.filter(c => {
-    return c.cmd.toLowerCase().includes(q) || c.desc.toLowerCase().includes(q) || c.id.toLowerCase().includes(q);
+    return (c.title && c.title.toLowerCase().includes(q)) ||
+           (c.meta && c.meta.toLowerCase().includes(q)) ||
+           (c.id && c.id.toLowerCase().includes(q)) ||
+           (c.cmd && c.cmd.toLowerCase().includes(q));
   });
 
   if (filteredCommands.length === 0) {
@@ -564,12 +567,15 @@ async function loadAndShowResumeSessions(filterText = '') {
 
   filteredCommands.forEach((item, index) => {
     const el = document.createElement('div');
-    el.className = `slash-item ${index === 0 ? 'selected' : ''}`;
+    el.className = `slash-item slash-session-item ${index === 0 ? 'selected' : ''}`;
     el.dataset.index = index;
+    el.title = item.title;
     el.innerHTML = `
       <span class="slash-item-icon">${item.icon}</span>
-      <span class="slash-item-cmd">${item.cmd}</span>
-      <span class="slash-item-desc">${item.desc}</span>
+      <div class="slash-session-info">
+        <span class="slash-session-title">${item.title}</span>
+        <span class="slash-session-meta">${item.meta}</span>
+      </div>
     `;
 
     el.addEventListener('mouseenter', () => {
@@ -702,7 +708,11 @@ function setAutocompleteSelected(index) {
 function chooseAutocompleteCommand(item) {
   // If choosing a session from the /resume submenu
   if (item.isSession) {
-    sessionInput.value = `/resume ${item.id} `;
+    if (item.id === 'latest') {
+      sessionInput.value = '/resume latest ';
+    } else {
+      sessionInput.value = `/resume "${item.title}" `;
+    }
     slashAutocomplete.classList.add('hidden');
     sessionInput.focus();
     return;

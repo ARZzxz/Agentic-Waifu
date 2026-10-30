@@ -52,21 +52,41 @@ let activeConversationId = null; // Specific Antigravity conversation ID if chos
 function cleanTitle(str) {
   if (!str) return 'Percakapan Antigravity';
   let t = str;
-  const m1 = t.match(/Tugas\/(?:Perintah|Pertanyaan) Pengguna:\s*([\s\S]*?)(?:<\/USER_REQUEST>|\n\n|$)/i);
-  if (m1) {
-    t = m1[1];
+
+  // 1. Check if user explicitly gave a title: berikan judul session ini "xxx"
+  const mTitle = t.match(/berikan judul session ini\s*["'“”]?([^"'“”\n\r]+)["'“”]?/i);
+  if (mTitle) return mTitle[1].trim();
+
+  // 2. Check for User Goal / Task inside prompt
+  const mGoal = t.match(/(?:(?:User Goal|Task|Goal):\s*)+([^\r\n]+)/i);
+  if (mGoal && mGoal[1].trim().length > 3) {
+    t = mGoal[1].trim();
   } else {
-    const m2 = t.match(/<USER_REQUEST>([\s\S]*?)<\/USER_REQUEST>/i);
-    if (m2) t = m2[1];
+    const m1 = t.match(/Tugas\/(?:Perintah|Pertanyaan) Pengguna:\s*([\s\S]*?)(?:<\/USER_REQUEST>|\n\n|$)/i);
+    if (m1) {
+      t = m1[1];
+    } else {
+      const m2 = t.match(/<USER_REQUEST>([\s\S]*?)<\/USER_REQUEST>/i);
+      if (m2) t = m2[1];
+    }
   }
+
   t = t
     .replace(/<[^>]+>/g, '')
     .replace(/Instruksi Persona[\s\S]*?(?:Tugas\/(?:Perintah|Pertanyaan) Pengguna:|Pertanyaan Pengguna:|Tugas Pengguna:)\s*/i, '')
+    .replace(/Anda adalah [^.]+\.\s*(?:Tugas Anda:)?/i, '')
+    .replace(/Anda asisten/i, '')
+    .replace(/Task:\s*/i, '')
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim();
+
   t = t.replace(/^(?:tolong|bisa tolong|apakah kamu bisa|coba|tolong buatkan|buatkan|carikan|mohon)\s+/i, '').trim();
+  t = t.replace(/^["'“”]+|["'“”]+$/g, '').trim();
+
   if (!t) return 'Percakapan Antigravity';
   t = t.charAt(0).toUpperCase() + t.slice(1);
-  return t.slice(0, 42);
+  return t.length > 50 ? t.slice(0, 48) + '…' : t;
 }
 
 // Helper: Scan previous Antigravity and Local sessions
@@ -89,9 +109,18 @@ function getAvailableSessions() {
               const lines = fs.readFileSync(transcriptPath, 'utf8').trim().split('\n').filter(Boolean);
               msgCount = lines.length;
               if (lines.length > 0) {
-                const first = JSON.parse(lines[0]);
-                if (first && first.content) {
-                  title = cleanTitle(first.content);
+                // Look for the first meaningful user input
+                for (const line of lines) {
+                  try {
+                    const parsed = JSON.parse(line);
+                    if (parsed.type === 'USER_INPUT' && parsed.content) {
+                      const extracted = cleanTitle(parsed.content);
+                      if (extracted && extracted !== 'Percakapan Antigravity') {
+                        title = extracted;
+                        break;
+                      }
+                    }
+                  } catch(e) {}
                 }
               }
             }
@@ -352,8 +381,16 @@ function handleSlashCommand(input) {
     const available = getAvailableSessions();
 
     if (arg && arg !== 'latest') {
-      // Find matching session by id or prefix
-      const match = available.find(s => s.id === arg || s.id.startsWith(arg) || s.shortId === arg);
+      const cleanArg = arg.replace(/^["'“”]|["'“”]$/g, '').trim().toLowerCase();
+      // Find matching session by title, id, or prefix
+      const match = available.find(s => 
+        s.title.toLowerCase() === cleanArg ||
+        s.title.toLowerCase().includes(cleanArg) ||
+        cleanArg.includes(s.title.toLowerCase()) ||
+        s.id.toLowerCase() === cleanArg || 
+        s.id.toLowerCase().startsWith(cleanArg) || 
+        s.shortId.toLowerCase() === cleanArg
+      );
       if (match) {
         activeConversationId = match.id;
         
@@ -381,10 +418,16 @@ function handleSlashCommand(input) {
 
         return {
           type: 'session_resume',
-          reply: `Ara ara~ Sesi [${match.title}] (${match.shortId}) berhasil di-resume sayang! Konteks aktif kembali, siap melanjutkan tugas apa?`,
+          reply: `Ara ara~ Sesi "${match.title}" berhasil di-resume sayang! Konteks aktif kembali, siap melanjutkan tugas apa?`,
           emotion: 'senyum_lembut',
           title: match.title,
           history: historyTurns
+        };
+      } else {
+        return {
+          type: 'static',
+          reply: `Ara ara~ Aku tidak menemukan sesi "${arg}". Ketik \`/resume\` untuk memilih dari daftar sesi yang ada ya sayang.`,
+          emotion: 'khawatir'
         };
       }
     }
