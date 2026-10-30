@@ -91,14 +91,16 @@ body {
   justify-content: center;
 }
 
-#live2d-canvas {
+#live2d-canvas,
+#vrm-canvas {
   width: 100%;
   height: 100%;
   display: block;
   cursor: grab;
 }
 
-#live2d-canvas:active {
+#live2d-canvas:active,
+#vrm-canvas:active {
   cursor: grabbing;
 }
 

@@ -467,11 +467,18 @@ function handleSlashCommand(input) {
       const listText = available.map(a => `• <code>/avatar ${a.id}</code> - ${a.name}`).join('\n');
       return {
         type: 'static',
-        reply: `Ara ara~ Berikut avatar visual yang siap digunakan:\n${listText}\n\nKamu juga bisa meletakkan folder model Live2D atau .vrm baru di folder <code>public/models/</code>!`,
+        reply: `Ara ara~ Berikut avatar visual yang siap digunakan:\n${listText}\n\nKamu juga bisa meletakkan folder model Live2D atau file 3D .vrm baru di folder <code>public/models/</code>!`,
         emotion: 'senyum_lembut'
       };
     }
     const match = available.find(a => a.id === arg || a.name.toLowerCase().includes(arg) || (a.id && a.id.includes(arg)));
+    if (match && match.type === 'vroid_project') {
+      return {
+        type: 'static',
+        reply: `Ara ara~ Model <strong>${match.name}</strong> saat ini masih berformat project mentah VRoid Studio (.vroid / data.bin).\n\nUntuk dapat ditampilkan sebagai avatar 3D interaktif di sini, silakan buka project ini di VRoid Studio, klik menu <strong>"Export as VRM"</strong>, dan simpan file <code>.vrm</code> hasil ekspornya ke dalam folder <code>${match.path}/</code> ya sayang! ✨`,
+        emotion: 'senyum_lembut'
+      };
+    }
     const targetId = match ? match.id : arg;
     const targetName = match ? match.name : arg;
 
@@ -686,7 +693,7 @@ app.get('/api/sessions', (req, res) => {
   res.json(list);
 });
 
-// Scan public/models for Live2D (Cubism 2/3/4) and 3D VRM models dynamically
+// Scan public/models for Live2D (Cubism 2/3/4), 3D VRM models, and VRoid Studio projects dynamically
 function scanAvailableAvatars() {
   const avatars = [];
   const modelsDir = path.join(__dirname, 'public', 'models');
@@ -697,10 +704,67 @@ function scanAvailableAvatars() {
     const entries = fs.readdirSync(modelsDir, { withFileTypes: true });
 
     for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-      const dirName = entry.name;
-      const subDir = path.join(modelsDir, dirName);
+      const entryName = entry.name;
+      const fullPath = path.join(modelsDir, entryName);
 
+      // 1. Check if it's a file placed directly in public/models
+      if (!entry.isDirectory()) {
+        const lowerFile = entryName.toLowerCase();
+        if (lowerFile.endsWith('.vrm')) {
+          const baseName = path.parse(entryName).name;
+          avatars.push({
+            id: baseName.toLowerCase().replace(/\s+/g, '-'),
+            name: `${baseName} (3D VRM)`,
+            type: 'vrm',
+            path: `models/${entryName}`
+          });
+        } else if (lowerFile.endsWith('.vroid')) {
+          const baseName = path.parse(entryName).name;
+          avatars.push({
+            id: baseName.toLowerCase().replace(/\s+/g, '-'),
+            name: `${baseName} (VRoid Project)`,
+            type: 'vroid_project',
+            path: `models/${entryName}`,
+            hint: 'File ini adalah project VRoid Studio (.vroid). Buka di VRoid Studio lalu pilih "Export as VRM" untuk membuat avatar 3D .vrm yang bisa ditampilkan!'
+          });
+        }
+        continue;
+      }
+
+      // 2. Check if it's a directory
+      const dirName = entryName;
+      const subDir = fullPath;
+
+      // Special check: Is this folder a VRoid project or contains .vroid?
+      if (dirName.toLowerCase().endsWith('.vroid') || fs.existsSync(path.join(subDir, 'v1model', 'data.bin'))) {
+        let innerVrm = null;
+        try {
+          innerVrm = fs.readdirSync(subDir).find(f => f.toLowerCase().endsWith('.vrm'));
+        } catch(e) {}
+
+        const cleanName = dirName.replace(/\.vroid$/i, '').trim();
+        const baseName = cleanName.charAt(0).toUpperCase() + cleanName.slice(1);
+
+        if (innerVrm) {
+          avatars.push({
+            id: cleanName.toLowerCase().replace(/\s+/g, '-'),
+            name: `${baseName} (3D VRM)`,
+            type: 'vrm',
+            path: `models/${dirName}/${innerVrm}`
+          });
+        } else {
+          avatars.push({
+            id: cleanName.toLowerCase().replace(/\s+/g, '-'),
+            name: `${baseName} (VRoid Project - Perlu Export VRM)`,
+            type: 'vroid_project',
+            path: `models/${dirName}`,
+            hint: 'Folder ini berisi project VRoid Studio (.vroid / data.bin). Untuk dapat ditampilkan secara visual, silakan buka karakter ini di VRoid Studio lalu klik menu "Export as VRM" dan letakkan file .vrm hasil ekspor ke dalam folder ini atau ke public/models/.'
+          });
+        }
+        continue;
+      }
+
+      // Check models/vrm/ folder
       if (dirName.toLowerCase() === 'vrm') {
         try {
           const vrmFiles = fs.readdirSync(subDir).filter(f => f.toLowerCase().endsWith('.vrm'));
@@ -719,6 +783,7 @@ function scanAvailableAvatars() {
         continue;
       }
 
+      // Check any other directory
       try {
         const files = fs.readdirSync(subDir);
 
@@ -760,12 +825,42 @@ function scanAvailableAvatars() {
         if (vrmFile) {
           const baseName = path.parse(vrmFile).name;
           avatars.push({
-            id: dirName.toLowerCase(),
+            id: dirName.toLowerCase().replace(/\s+/g, '-'),
             name: `${baseName} (3D VRM)`,
             type: 'vrm',
             path: `models/${dirName}/${vrmFile}`
           });
           continue;
+        }
+
+        // Check nested directories (e.g. models/group/model/...)
+        for (const f of files) {
+          const nestedPath = path.join(subDir, f);
+          try {
+            if (fs.statSync(nestedPath).isDirectory()) {
+              const nestedFiles = fs.readdirSync(nestedPath);
+              const nestedModel3 = nestedFiles.find(nf => nf.toLowerCase().endsWith('.model3.json'));
+              if (nestedModel3) {
+                avatars.push({
+                  id: `${dirName}-${f}`.toLowerCase(),
+                  name: `${f} (Live2D)`,
+                  type: 'live2d',
+                  path: `models/${dirName}/${f}/${nestedModel3}`
+                });
+                break;
+              }
+              const nestedVrm = nestedFiles.find(nf => nf.toLowerCase().endsWith('.vrm'));
+              if (nestedVrm) {
+                avatars.push({
+                  id: `${dirName}-${f}`.toLowerCase(),
+                  name: `${path.parse(nestedVrm).name} (3D VRM)`,
+                  type: 'vrm',
+                  path: `models/${dirName}/${f}/${nestedVrm}`
+                });
+                break;
+              }
+            }
+          } catch(e) {}
         }
       } catch(e) {}
     }

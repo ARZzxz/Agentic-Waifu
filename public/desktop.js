@@ -245,8 +245,8 @@ async function loadVrmModel(url) {
         currentVrm = vrm;
         vrmScene.add(vrm.scene);
 
-        // Turn around to face camera (+Z)
-        vrm.scene.rotation.y = Math.PI;
+        // Face camera (+Z)
+        vrm.scene.rotation.y = 0;
 
         // Relax arms from T-pose
         if (vrm.humanoid) {
@@ -320,6 +320,11 @@ async function switchAvatar(targetId) {
   const av = AVATARS.find(a => a.id === q || a.name.toLowerCase().includes(q) || (a.id && a.id.includes(q))) || AVATARS[0];
   currentAvatarIndex = AVATARS.indexOf(av);
   localStorage.setItem('preferred_avatar', av.id);
+
+  if (av.type === 'vroid_project') {
+    showSpeechBubble(`Ara ara~ Model <strong>${av.name}</strong> masih berupa project mentah VRoid Studio (.vroid / data.bin).<br><br>Buka karakter ini di VRoid Studio lalu pilih menu <strong>"Export as VRM"</strong>, simpan file <code>.vrm</code> hasil ekspornya ke folder model agar bisa langsung saya tampilkan ya sayang! ✨`, 'senyum_lembut');
+    return;
+  }
 
   if (av.type === 'live2d') {
     activeEngine = 'live2d';

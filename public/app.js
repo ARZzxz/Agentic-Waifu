@@ -6,6 +6,18 @@ let mouthAnimationId = null;
 let chatHistory = [];
 let defaultModelPath = 'models/haru/haru_greeter_t03.model3.json';
 let availableAvatars = [];
+let activeEngine = 'live2d'; // 'live2d' | 'vrm'
+let bubbleTypewriterTimer = null;
+
+// VRM Engine State
+let vrmScene = null;
+let vrmCamera = null;
+let vrmRenderer = null;
+let currentVrm = null;
+let vrmClock = null;
+let vrmLoopId = null;
+let vrmBlinkTimer = null;
+let vrmCanvas = null;
 
 // DOM Elements
 const canvas = document.getElementById('live2d-canvas');
@@ -135,7 +147,192 @@ async function loadLive2DModel(modelPath) {
   }
 }
 
-// 2B. Load Dynamic Avatars from Backend
+// 2B. VRM 3D Avatar Engine & Controls
+function initVrmEngine() {
+  if (vrmRenderer) return;
+  vrmCanvas = document.getElementById('vrm-canvas');
+  if (!vrmCanvas) return;
+  const rect = canvasContainer.getBoundingClientRect();
+  const width = rect.width || 800;
+  const height = rect.height || 700;
+
+  vrmScene = new THREE.Scene();
+  vrmClock = new THREE.Clock();
+
+  vrmCamera = new THREE.PerspectiveCamera(30, width / height, 0.1, 20);
+  vrmCamera.position.set(0, 1.35, 1.45);
+  vrmCamera.lookAt(0, 1.25, 0);
+
+  vrmRenderer = new THREE.WebGLRenderer({
+    canvas: vrmCanvas,
+    alpha: true,
+    antialias: true
+  });
+  vrmRenderer.setSize(width, height);
+  vrmRenderer.setPixelRatio(window.devicePixelRatio || 1);
+  vrmRenderer.outputEncoding = THREE.sRGBEncoding;
+
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
+  vrmScene.add(ambientLight);
+
+  const dirLight = new THREE.DirectionalLight(0xffeedd, 0.95);
+  dirLight.position.set(1, 2, 1).normalize();
+  vrmScene.add(dirLight);
+
+  const backLight = new THREE.DirectionalLight(0xcceeff, 0.45);
+  backLight.position.set(-1, 1, -1).normalize();
+  vrmScene.add(backLight);
+
+  window.addEventListener('resize', onVrmResize);
+}
+
+function onVrmResize() {
+  if (!vrmRenderer || !vrmCamera) return;
+  const rect = canvasContainer.getBoundingClientRect();
+  const width = rect.width || 800;
+  const height = rect.height || 700;
+  vrmCamera.aspect = width / height;
+  vrmCamera.updateProjectionMatrix();
+  vrmRenderer.setSize(width, height);
+}
+
+function startVrmLoop() {
+  if (vrmLoopId) cancelAnimationFrame(vrmLoopId);
+  function loop() {
+    vrmLoopId = requestAnimationFrame(loop);
+    const delta = vrmClock ? vrmClock.getDelta() : 0.016;
+    if (currentVrm) {
+      currentVrm.update(delta);
+    }
+    if (vrmRenderer && vrmScene && vrmCamera) {
+      vrmRenderer.render(vrmScene, vrmCamera);
+    }
+  }
+  loop();
+}
+
+function startVrmBlinking() {
+  if (vrmBlinkTimer) clearInterval(vrmBlinkTimer);
+  vrmBlinkTimer = setInterval(() => {
+    if (!currentVrm || !currentVrm.expressionManager || isSpeaking) return;
+    try {
+      let blinkVal = 0;
+      let closing = true;
+      const bInterval = setInterval(() => {
+        if (closing) {
+          blinkVal += 0.25;
+          if (blinkVal >= 1.0) {
+            blinkVal = 1.0;
+            closing = false;
+          }
+        } else {
+          blinkVal -= 0.25;
+          if (blinkVal <= 0) {
+            blinkVal = 0;
+            clearInterval(bInterval);
+          }
+        }
+        currentVrm.expressionManager.setValue('blink', blinkVal);
+      }, 20);
+    } catch (e) {}
+  }, 4000);
+}
+
+async function loadVrmModel(url) {
+  initVrmEngine();
+  characterStatus.textContent = 'Memuat Model 3D VRM...';
+
+  const loader = new THREE.GLTFLoader();
+  loader.register((parser) => new THREE_VRM.VRMLoaderPlugin(parser));
+
+  return new Promise((resolve, reject) => {
+    loader.load(
+      url,
+      (gltf) => {
+        const vrm = gltf.userData.vrm;
+        if (!vrm) {
+          characterStatus.textContent = 'Gagal: Format VRM tidak valid';
+          return reject(new Error('No VRM found in model file'));
+        }
+
+        if (currentVrm) {
+          vrmScene.remove(currentVrm.scene);
+          THREE_VRM.VRMUtils.deepDispose(currentVrm.scene);
+          currentVrm = null;
+        }
+
+        currentVrm = vrm;
+        vrmScene.add(vrm.scene);
+
+        // Face camera (+Z)
+        vrm.scene.rotation.y = 0;
+
+        // Relax arms from T-pose
+        if (vrm.humanoid) {
+          try {
+            const leftUpperArm = vrm.humanoid.getNormalizedBoneNode('leftUpperArm');
+            const rightUpperArm = vrm.humanoid.getNormalizedBoneNode('rightUpperArm');
+            if (leftUpperArm) leftUpperArm.rotation.z = 1.15;
+            if (rightUpperArm) rightUpperArm.rotation.z = -1.15;
+          } catch(e) {}
+        }
+
+        startVrmLoop();
+        startVrmBlinking();
+        characterStatus.textContent = 'AI Assistant • Ready (3D VRM)';
+        console.log('VRM Model Loaded successfully in browser:', url);
+        resolve(vrm);
+      },
+      undefined,
+      (err) => {
+        console.error('Failed to load VRM model in browser:', err);
+        characterStatus.textContent = 'Gagal memuat model VRM';
+        reject(err);
+      }
+    );
+  });
+}
+
+// 2C. Switch Visual Avatar (Live2D vs 3D VRM)
+async function switchAvatar(target) {
+  if (!target) return;
+  if (availableAvatars.length === 0) {
+    await loadAvatarsList();
+  }
+  const q = String(target).toLowerCase().trim();
+  const av = availableAvatars.find(a =>
+    a.path === target ||
+    a.id === q ||
+    a.name.toLowerCase().includes(q) ||
+    (a.id && a.id.includes(q))
+  );
+
+  if (!av) return;
+
+  if (av.type === 'vroid_project') {
+    showBubble(`Ara ara~ Model <strong>${av.name}</strong> masih berupa project mentah VRoid Studio (.vroid / data.bin).<br><br>Buka di VRoid Studio lalu pilih menu <strong>"Export as VRM"</strong> dan letakkan file <code>.vrm</code> hasil ekspornya agar bisa langsung saya tampilkan ya sayang! ✨`, 'senyum_lembut');
+    return;
+  }
+
+  localStorage.setItem('preferred_avatar_path', av.path);
+  if (selectLive2D) selectLive2D.value = av.path;
+
+  if (av.type === 'live2d') {
+    activeEngine = 'live2d';
+    if (vrmCanvas) vrmCanvas.style.display = 'none';
+    if (canvas) canvas.style.display = 'block';
+    await loadLive2DModel(av.path);
+    showBubble(`Model avatar beralih ke <strong>${av.name}</strong> (Live2D)!`, 'senyum_lembut');
+  } else if (av.type === 'vrm') {
+    activeEngine = 'vrm';
+    if (canvas) canvas.style.display = 'none';
+    if (vrmCanvas) vrmCanvas.style.display = 'block';
+    await loadVrmModel(av.path);
+    showBubble(`Model avatar beralih ke <strong>${av.name}</strong> (3D VRM)!`, 'senyum_lembut');
+  }
+}
+
+// 2D. Load Dynamic Avatars from Backend
 async function loadAvatarsList() {
   try {
     const res = await fetch('/api/avatars');
@@ -257,14 +454,22 @@ function stopLipSync() {
 }
 
 function setMouthOpen(val) {
-  if (!currentModel || !currentModel.internalModel) return;
-  try {
-    const core = currentModel.internalModel.coreModel;
-    if (core && core.setParameterValueById) {
-      core.setParameterValueById('ParamMouthOpenY', val);
+  if (activeEngine === 'live2d') {
+    if (!currentModel || !currentModel.internalModel) return;
+    try {
+      const core = currentModel.internalModel.coreModel;
+      if (core && core.setParameterValueById) {
+        core.setParameterValueById('ParamMouthOpenY', val);
+      }
+    } catch (e) {
+      // Ignore if parameter id doesn't match
     }
-  } catch (e) {
-    // Ignore if parameter id doesn't match
+  } else if (activeEngine === 'vrm') {
+    if (currentVrm && currentVrm.expressionManager) {
+      try {
+        currentVrm.expressionManager.setValue('aa', val);
+      } catch (e) {}
+    }
   }
 }
 
@@ -275,39 +480,77 @@ function applyEmotion(emotionKey) {
   // Update badge UI
   emotionBadge.innerHTML = `<i class="fa-solid ${emo.icon}"></i> ${emo.label}`;
 
-  if (!currentModel) return;
-
-  // Trigger Live2D expression or motion
-  try {
-    if (emo.expression && currentModel.expression) {
-      currentModel.expression(emo.expression);
+  if (activeEngine === 'live2d' && currentModel) {
+    // Trigger Live2D expression or motion
+    try {
+      if (emo.expression && currentModel.expression) {
+        currentModel.expression(emo.expression);
+      }
+      if (emo.motionGroup && currentModel.motion) {
+        currentModel.motion(emo.motionGroup);
+      }
+    } catch (err) {
+      console.warn('Gagal memicu ekspresi/motion Live2D:', err);
     }
-    if (emo.motionGroup && currentModel.motion) {
-      currentModel.motion(emo.motionGroup);
-    }
-  } catch (err) {
-    console.warn('Gagal memicu ekspresi/motion Live2D:', err);
+  } else if (activeEngine === 'vrm' && currentVrm && currentVrm.expressionManager) {
+    const vrmMap = {
+      senang: 'happy',
+      antusias: 'happy',
+      bangga: 'happy',
+      lucu: 'happy',
+      sedih: 'sad',
+      kecewa: 'sad',
+      marah: 'angry',
+      terkejut: 'surprised',
+      bingung: 'neutral',
+      santai: 'relaxed',
+      senyum_lembut: 'relaxed',
+      fokus: 'relaxed',
+      berpikir: 'neutral',
+      khawatir: 'sad'
+    };
+    const preset = vrmMap[emotionKey] || 'relaxed';
+    ['happy', 'sad', 'angry', 'surprised', 'relaxed'].forEach(k => {
+      try { currentVrm.expressionManager.setValue(k, 0); } catch(e) {}
+    });
+    try { currentVrm.expressionManager.setValue(preset, 0.85); } catch(e) {}
   }
 }
 
 function showBubble(text, emotionKey = 'senyum_lembut') {
+  if (bubbleTypewriterTimer) {
+    clearInterval(bubbleTypewriterTimer);
+    bubbleTypewriterTimer = null;
+  }
+
   applyEmotion(emotionKey);
   bubbleContainer.style.opacity = '1';
   bubbleContainer.style.transform = 'translateY(0)';
 
-  // Typewriter effect in speech bubble
+  // If text contains HTML tags (e.g. <strong>, <code>, <br>), render directly to avoid mangling characters
+  if (/<[a-z][\s\S]*>/i.test(text)) {
+    bubbleText.innerHTML = text;
+    startLipSync();
+    setTimeout(() => {
+      stopLipSync();
+    }, Math.min(Math.max(text.length * 20, 1200), 4000));
+    return;
+  }
+
+  // Typewriter effect in speech bubble for clean plain text
   bubbleText.textContent = '';
   startLipSync();
 
   let index = 0;
   const speed = 25; // ms per char
 
-  const timer = setInterval(() => {
+  bubbleTypewriterTimer = setInterval(() => {
     if (index < text.length) {
       bubbleText.textContent += text.charAt(index);
       index++;
     } else {
-      clearInterval(timer);
+      clearInterval(bubbleTypewriterTimer);
+      bubbleTypewriterTimer = null;
       stopLipSync();
     }
   }, speed);
@@ -433,7 +676,13 @@ function setupEventListeners() {
 
   // Reset model position
   btnResetPos.addEventListener('click', () => {
-    if (currentModel) positionModel(currentModel);
+    if (activeEngine === 'live2d' && currentModel) {
+      positionModel(currentModel);
+    } else if (activeEngine === 'vrm' && currentVrm && vrmCamera) {
+      vrmCamera.position.set(0, 1.35, 1.45);
+      vrmCamera.lookAt(0, 1.25, 0);
+      currentVrm.scene.rotation.set(0, 0, 0);
+    }
   });
 
   // Toggle speech bubble
@@ -457,11 +706,7 @@ function setupEventListeners() {
     selectLive2D.addEventListener('change', async () => {
       const selectedPath = selectLive2D.value;
       if (!selectedPath) return;
-      localStorage.setItem('preferred_avatar_path', selectedPath);
-      await loadLive2DModel(selectedPath);
-      const av = availableAvatars.find(a => a.path === selectedPath);
-      const name = av ? av.name : 'Model';
-      showBubble(`Model avatar beralih ke <strong>${name}</strong>!`, 'senyum_lembut');
+      await switchAvatar(selectedPath);
     });
   }
 
@@ -505,12 +750,22 @@ function setupEventListeners() {
 
 // Bootstrap Application
 window.addEventListener('DOMContentLoaded', async () => {
+  vrmCanvas = document.getElementById('vrm-canvas');
   await loadAvatarsList();
   const savedPath = localStorage.getItem('preferred_avatar_path');
-  if (savedPath && availableAvatars.some(a => a.path === savedPath)) {
-    defaultModelPath = savedPath;
+  const matchedAv = savedPath ? availableAvatars.find(a => a.path === savedPath) : null;
+
+  if (matchedAv && matchedAv.type === 'vrm') {
+    await initPixi();
+    setupEventListeners();
+    checkApiStatus();
+    await switchAvatar(matchedAv.path);
+  } else {
+    if (matchedAv && matchedAv.type === 'live2d') {
+      defaultModelPath = matchedAv.path;
+    }
+    await initPixi();
+    setupEventListeners();
+    checkApiStatus();
   }
-  await initPixi();
-  setupEventListeners();
-  checkApiStatus();
 });
