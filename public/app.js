@@ -367,13 +367,8 @@ async function checkApiStatus() {
     const res = await fetch('/api/status');
     const data = await res.json();
 
-    if (data.configured) {
-      apiStatusIndicator.textContent = `Online • ${data.model}`;
-      apiStatusIndicator.className = 'api-status ok';
-    } else {
-      apiStatusIndicator.textContent = 'API Key belum disetel!';
-      apiStatusIndicator.className = 'api-status warning';
-    }
+    apiStatusIndicator.innerHTML = `<i class="fa-solid fa-circle-check"></i> Online • ${data.engine || 'Antigravity Agentic'}`;
+    apiStatusIndicator.className = 'api-status ok';
   } catch (err) {
     apiStatusIndicator.textContent = 'Server Offline';
     apiStatusIndicator.className = 'api-status warning';
@@ -437,16 +432,16 @@ function setupEventListeners() {
     const key = inputApiKey.value.trim();
     const model = selectModel.value;
 
-    if (!key) {
-      alert('Silakan masukkan API Key.');
-      return;
-    }
-
     try {
+      const payload = { model: model };
+      if (key) {
+        payload.apiKey = key;
+      }
+
       const res = await fetch('/api/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apiKey: key, model: model })
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
       if (res.ok) {

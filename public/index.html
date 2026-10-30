@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Professional AI Assistant</title>
+  <title>Akeno - Antigravity Agentic Companion</title>
   
   <!-- Live2D SDK Dependencies -->
   <script src="https://cdn.jsdelivr.net/gh/dylanNew/live2d/webgl/Live2D/lib/live2d.min.js"></script>
@@ -101,8 +101,8 @@
           </button>
         </div>
         <div class="input-footer">
-          <span>Powered by Google Gemini Pro</span>
-          <span id="api-status-indicator" class="api-status warning">Memeriksa API Key...</span>
+          <span>Powered by Antigravity Agentic</span>
+          <span id="api-status-indicator" class="api-status ok"><i class="fa-solid fa-circle-check"></i> Antigravity Agentic: Online</span>
         </div>
       </div>
     </div>
@@ -117,14 +117,14 @@
       </div>
       <div class="modal-body">
         <div class="form-group">
-          <label for="input-api-key">Gemini API Key:</label>
+          <label for="input-api-key">Gemini API Key (Opsional):</label>
           <div class="input-with-action">
-            <input type="password" id="input-api-key" placeholder="AIzaSy...">
+            <input type="password" id="input-api-key" placeholder="Sudah terhubung ke Antigravity CLI (Tidak wajib diisi)">
             <button type="button" id="btn-toggle-key-visibility" class="sub-btn">
               <i class="fa-solid fa-eye"></i>
             </button>
           </div>
-          <small>API key akan disimpan pada file <code>.env</code> lokal di perangkat Anda.</small>
+          <small><i class="fa-solid fa-circle-check" style="color: #10b981;"></i> <strong>Tidak diperlukan:</strong> Agent sudah terhubung langsung ke Antigravity CLI di sistem ini. Kamu tidak perlu memasukkan API key secara manual.</small>
         </div>
 
         <div class="form-group">

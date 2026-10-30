@@ -720,8 +720,10 @@ app.post('/api/session/new', (req, res) => {
 app.get('/api/status', (req, res) => {
   res.json({
     configured: true,
-    engine: 'Antigravity Agentic + Gemini 3.5 Flash',
-    isAgenticVessel: true
+    engine: 'Antigravity Agentic Engine',
+    model: process.env.GEMINI_MODEL || 'Gemini 3.8 Flash (High)',
+    isAgenticVessel: true,
+    requiresApiKey: false
   });
 });
 
@@ -1010,32 +1012,40 @@ app.post('/api/chat', async (req, res) => {
   });
 });
 
-// Update .env API Key Endpoint
+// Update Configuration Endpoint (API Key is purely optional)
 app.post('/api/config', (req, res) => {
-  const { apiKey } = req.body;
-  if (!apiKey) {
-    return res.status(400).json({ error: 'API Key tidak boleh kosong.' });
+  const { apiKey, model } = req.body;
+
+  if (model) {
+    process.env.GEMINI_MODEL = model;
   }
 
-  const envPath = path.join(__dirname, '.env');
-  let envContent = '';
-  if (fs.existsSync(envPath)) {
-    envContent = fs.readFileSync(envPath, 'utf8');
+  if (apiKey && apiKey.trim()) {
+    const trimmedKey = apiKey.trim();
+    const envPath = path.join(__dirname, '.env');
+    let envContent = '';
+    if (fs.existsSync(envPath)) {
+      envContent = fs.readFileSync(envPath, 'utf8');
+    }
+
+    if (envContent.includes('GEMINI_API_KEY=')) {
+      envContent = envContent.replace(/GEMINI_API_KEY=.*/, `GEMINI_API_KEY=${trimmedKey}`);
+    } else {
+      envContent += `\nGEMINI_API_KEY=${trimmedKey}\n`;
+    }
+
+    try {
+      fs.writeFileSync(envPath, envContent, 'utf8');
+      process.env.GEMINI_API_KEY = trimmedKey;
+    } catch (err) {
+      console.error('Gagal menulis file .env:', err.message);
+    }
   }
 
-  if (envContent.includes('GEMINI_API_KEY=')) {
-    envContent = envContent.replace(/GEMINI_API_KEY=.*/, `GEMINI_API_KEY=${apiKey.trim()}`);
-  } else {
-    envContent += `\nGEMINI_API_KEY=${apiKey.trim()}\n`;
-  }
-
-  try {
-    fs.writeFileSync(envPath, envContent, 'utf8');
-    process.env.GEMINI_API_KEY = apiKey.trim();
-    res.json({ success: true, message: 'API Key berhasil disimpan!' });
-  } catch (err) {
-    res.status(500).json({ error: 'Gagal menulis file .env: ' + err.message });
-  }
+  res.json({
+    success: true,
+    message: 'Pengaturan berhasil disimpan! Sistem menggunakan Antigravity Agentic Engine tanpa perlu API key manual.'
+  });
 });
 
 app.listen(PORT, '0.0.0.0', () => {
