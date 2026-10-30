@@ -156,12 +156,30 @@ async function loadLive2DModel(modelPath) {
     currentModel = model;
     app.stage.addChild(model);
 
-    // Scale and position model: Face & chest high up
-    const scale = (height / model.height) * 0.95;
-    model.scale.set(scale);
-    model.anchor.set(0.5, 0.5);
-    model.x = width * 0.5;
-    model.y = height * 0.48;
+    // Scale and position model properly based on proportions
+    const baseW = model.internalModel ? model.internalModel.width : model.width;
+    const baseH = model.internalModel ? model.internalModel.height : model.height;
+    const isHalfBody = (baseH / baseW) < 1.4;
+
+    let scale;
+    if (isHalfBody) {
+      // Half-body / bust models (e.g. Shizuku): scale proportionally so character does not overflow
+      scale = (width * 0.75) / baseW;
+      model.scale.set(scale);
+      model.anchor.set(0.5, 0.5);
+      model.x = width * 0.5;
+      model.y = height * 0.56;
+    } else {
+      // Full-body models (e.g. Haru, Tingyun)
+      scale = (height / baseH) * 0.95;
+      if (baseW * scale > width * 1.15) {
+        scale = (width * 1.05) / baseW;
+      }
+      model.scale.set(scale);
+      model.anchor.set(0.5, 0.5);
+      model.x = width * 0.5;
+      model.y = height * 0.48;
+    }
 
     console.log('Live2D Model Loaded:', modelPath);
   } catch (err) {
@@ -188,8 +206,8 @@ function initVrmEngine() {
   vrmScene = new THREE.Scene();
 
   vrmCamera = new THREE.PerspectiveCamera(30, width / height, 0.1, 20);
-  vrmCamera.position.set(0, 1.35, 1.15);
-  vrmCamera.lookAt(0, 1.28, 0);
+  vrmCamera.position.set(0, 1.10, 2.2);
+  vrmCamera.lookAt(0, 0.95, 0);
 
   vrmRenderer = new THREE.WebGLRenderer({
     canvas: vrmCanvas,
@@ -248,13 +266,19 @@ async function loadVrmModel(url) {
         // Face camera (+Z)
         vrm.scene.rotation.y = 0;
 
-        // Relax arms from T-pose
+        // Relax arms from T-pose naturally along torso
         if (vrm.humanoid) {
           try {
             const leftUpperArm = vrm.humanoid.getNormalizedBoneNode('leftUpperArm');
             const rightUpperArm = vrm.humanoid.getNormalizedBoneNode('rightUpperArm');
-            if (leftUpperArm) leftUpperArm.rotation.z = 1.15;
-            if (rightUpperArm) rightUpperArm.rotation.z = -1.15;
+            if (leftUpperArm) {
+              leftUpperArm.rotation.z = -1.22;
+              leftUpperArm.rotation.x = 0.12;
+            }
+            if (rightUpperArm) {
+              rightUpperArm.rotation.z = 1.22;
+              rightUpperArm.rotation.x = 0.12;
+            }
           } catch(e) {}
         }
 
@@ -299,6 +323,16 @@ function startVrmLoop() {
           const chest = currentVrm.humanoid.getNormalizedBoneNode('chest') || currentVrm.humanoid.getNormalizedBoneNode('spine');
           if (chest) {
             chest.rotation.x = Math.sin(time * 1.5) * 0.02;
+          }
+          const leftUpperArm = currentVrm.humanoid.getNormalizedBoneNode('leftUpperArm');
+          const rightUpperArm = currentVrm.humanoid.getNormalizedBoneNode('rightUpperArm');
+          if (leftUpperArm) {
+            leftUpperArm.rotation.z = -1.22 + Math.sin(time * 1.5) * 0.01;
+            leftUpperArm.rotation.x = 0.12;
+          }
+          if (rightUpperArm) {
+            rightUpperArm.rotation.z = 1.22 - Math.sin(time * 1.5) * 0.01;
+            rightUpperArm.rotation.x = 0.12;
           }
         } catch(e) {}
       }

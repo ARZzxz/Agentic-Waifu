@@ -160,8 +160,8 @@ function initVrmEngine() {
   vrmClock = new THREE.Clock();
 
   vrmCamera = new THREE.PerspectiveCamera(30, width / height, 0.1, 20);
-  vrmCamera.position.set(0, 1.35, 1.45);
-  vrmCamera.lookAt(0, 1.25, 0);
+  vrmCamera.position.set(0, 1.10, 2.3);
+  vrmCamera.lookAt(0, 0.95, 0);
 
   vrmRenderer = new THREE.WebGLRenderer({
     canvas: vrmCanvas,
@@ -201,7 +201,27 @@ function startVrmLoop() {
   function loop() {
     vrmLoopId = requestAnimationFrame(loop);
     const delta = vrmClock ? vrmClock.getDelta() : 0.016;
+    const time = vrmClock ? vrmClock.getElapsedTime() : Date.now() * 0.001;
+
     if (currentVrm) {
+      if (currentVrm.humanoid) {
+        try {
+          const chest = currentVrm.humanoid.getNormalizedBoneNode('chest') || currentVrm.humanoid.getNormalizedBoneNode('spine');
+          if (chest) {
+            chest.rotation.x = Math.sin(time * 1.5) * 0.02;
+          }
+          const leftUpperArm = currentVrm.humanoid.getNormalizedBoneNode('leftUpperArm');
+          const rightUpperArm = currentVrm.humanoid.getNormalizedBoneNode('rightUpperArm');
+          if (leftUpperArm) {
+            leftUpperArm.rotation.z = -1.22 + Math.sin(time * 1.5) * 0.01;
+            leftUpperArm.rotation.x = 0.12;
+          }
+          if (rightUpperArm) {
+            rightUpperArm.rotation.z = 1.22 - Math.sin(time * 1.5) * 0.01;
+            rightUpperArm.rotation.x = 0.12;
+          }
+        } catch(e) {}
+      }
       currentVrm.update(delta);
     }
     if (vrmRenderer && vrmScene && vrmCamera) {
@@ -267,13 +287,19 @@ async function loadVrmModel(url) {
         // Face camera (+Z)
         vrm.scene.rotation.y = 0;
 
-        // Relax arms from T-pose
+        // Relax arms naturally along body from T-pose
         if (vrm.humanoid) {
           try {
             const leftUpperArm = vrm.humanoid.getNormalizedBoneNode('leftUpperArm');
             const rightUpperArm = vrm.humanoid.getNormalizedBoneNode('rightUpperArm');
-            if (leftUpperArm) leftUpperArm.rotation.z = 1.15;
-            if (rightUpperArm) rightUpperArm.rotation.z = -1.15;
+            if (leftUpperArm) {
+              leftUpperArm.rotation.z = -1.22;
+              leftUpperArm.rotation.x = 0.12;
+            }
+            if (rightUpperArm) {
+              rightUpperArm.rotation.z = 1.22;
+              rightUpperArm.rotation.x = 0.12;
+            }
           } catch(e) {}
         }
 
@@ -361,20 +387,32 @@ async function loadAvatarsList() {
   }
 }
 
-// Position & Scale Model
+// Position & Scale Model properly based on proportions
 function positionModel(model) {
   if (!model) return;
   const canvasWidth = app.renderer.width;
   const canvasHeight = app.renderer.height;
 
-  // Scale model appropriately to fit viewport
-  const scale = (canvasHeight / model.height) * 0.88;
-  model.scale.set(scale);
+  const baseW = model.internalModel ? model.internalModel.width : model.width;
+  const baseH = model.internalModel ? model.internalModel.height : model.height;
+  const isHalfBody = (baseH / baseW) < 1.4;
 
-  // Position at bottom center-left
-  model.anchor.set(0.5, 0.5);
-  model.x = canvasWidth * 0.45;
-  model.y = canvasHeight * 0.55;
+  let scale;
+  if (isHalfBody) {
+    // Half-body / desk models (e.g. Shizuku): scale proportionally so character does not overwhelm the viewport
+    scale = Math.min((canvasWidth * 0.35) / baseW, (canvasHeight * 0.50) / baseH);
+    model.scale.set(scale);
+    model.anchor.set(0.5, 0.5);
+    model.x = canvasWidth * 0.38;
+    model.y = canvasHeight * 0.64;
+  } else {
+    // Full-body models (e.g. Haru, Tingyun)
+    scale = (canvasHeight / baseH) * 0.88;
+    model.scale.set(scale);
+    model.anchor.set(0.5, 0.5);
+    model.x = canvasWidth * 0.45;
+    model.y = canvasHeight * 0.55;
+  }
 }
 
 // Enable Dragging & Zooming for Model
@@ -679,8 +717,8 @@ function setupEventListeners() {
     if (activeEngine === 'live2d' && currentModel) {
       positionModel(currentModel);
     } else if (activeEngine === 'vrm' && currentVrm && vrmCamera) {
-      vrmCamera.position.set(0, 1.35, 1.45);
-      vrmCamera.lookAt(0, 1.25, 0);
+      vrmCamera.position.set(0, 1.10, 2.3);
+      vrmCamera.lookAt(0, 0.95, 0);
       currentVrm.scene.rotation.set(0, 0, 0);
     }
   });
