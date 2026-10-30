@@ -113,16 +113,13 @@ async function initPixi() {
   await loadLive2DModel(defaultModelPath);
 }
 
+let currentLive2DLoadId = 0;
+
 // 2. Load and Configure Live2D Model
 async function loadLive2DModel(modelPath) {
+  const loadId = ++currentLive2DLoadId;
   try {
     characterStatus.textContent = 'Memuat Model Live2D...';
-    
-    if (currentModel) {
-      app.stage.removeChild(currentModel);
-      currentModel.destroy();
-      currentModel = null;
-    }
 
     // Register PIXI ticker
     PIXI.live2d.Live2DModel.registerTicker(PIXI.Ticker);
@@ -130,6 +127,17 @@ async function loadLive2DModel(modelPath) {
     const model = await PIXI.live2d.Live2DModel.from(modelPath, {
       autoInteract: true,
     });
+
+    if (loadId !== currentLive2DLoadId) {
+      try { model.destroy(); } catch(e) {}
+      return;
+    }
+
+    if (currentModel) {
+      app.stage.removeChild(currentModel);
+      currentModel.destroy();
+      currentModel = null;
+    }
 
     currentModel = model;
     defaultModelPath = modelPath;
@@ -160,8 +168,8 @@ function initVrmEngine() {
   vrmClock = new THREE.Clock();
 
   vrmCamera = new THREE.PerspectiveCamera(30, width / height, 0.1, 20);
-  vrmCamera.position.set(0, 1.10, 2.3);
-  vrmCamera.lookAt(0, 0.95, 0);
+  vrmCamera.position.set(0, 0.95, 2.6);
+  vrmCamera.lookAt(0, 0.85, 0);
 
   vrmRenderer = new THREE.WebGLRenderer({
     canvas: vrmCanvas,

@@ -135,15 +135,11 @@ async function initPixi() {
   await loadLive2DModel(defaultModelPath);
 }
 
+let currentLive2DLoadId = 0;
+
 async function loadLive2DModel(modelPath) {
   if (!app) return;
-  if (currentModel) {
-    try {
-      app.stage.removeChild(currentModel);
-      currentModel.destroy();
-    } catch(e) {}
-    currentModel = null;
-  }
+  const loadId = ++currentLive2DLoadId;
 
   const height = 540;
   const width = 260;
@@ -152,6 +148,19 @@ async function loadLive2DModel(modelPath) {
     const model = await PIXI.live2d.Live2DModel.from(modelPath, {
       autoInteract: true
     });
+
+    if (loadId !== currentLive2DLoadId) {
+      try { model.destroy(); } catch(e) {}
+      return;
+    }
+
+    if (currentModel) {
+      try {
+        app.stage.removeChild(currentModel);
+        currentModel.destroy();
+      } catch(e) {}
+      currentModel = null;
+    }
 
     currentModel = model;
     app.stage.addChild(model);
