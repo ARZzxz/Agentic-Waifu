@@ -23,11 +23,25 @@ const defaultModelPath = 'models/haru/haru_greeter_t03.model3.json';
 // Avatars Catalog & Multi-Format Engine (Live2D & 3D VRM)
 let activeEngine = 'live2d'; // 'live2d' | 'vrm'
 let currentAvatarIndex = 0;
-const AVATARS = [
+let AVATARS = [
   { id: 'haru', name: 'Akeno (Haru Live2D)', type: 'live2d', path: 'models/haru/haru_greeter_t03.model3.json' },
   { id: 'shizuku', name: 'Shizuku (Live2D)', type: 'live2d', path: 'models/shizuku/shizuku.model.json' },
   { id: 'seed-san', name: 'Seed-san (3D VRM)', type: 'vrm', path: 'models/vrm/seed-san.vrm' }
 ];
+
+async function loadAvatarsCatalog() {
+  try {
+    const res = await fetch('/api/avatars');
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        AVATARS = data;
+      }
+    }
+  } catch(e) {
+    console.error('Gagal memuat katalog avatar:', e);
+  }
+}
 
 // DOM Elements
 const layout = document.getElementById('companion-layout');
@@ -38,6 +52,7 @@ const bubbleEmotion = document.getElementById('bubble-emotion');
 const bubbleText = document.getElementById('bubble-text');
 const bubbleProcess = document.getElementById('bubble-process');
 const bubbleProcessLabel = document.getElementById('bubble-process-label');
+const btnBubbleAvatar = document.getElementById('btn-bubble-avatar');
 const btnBubbleExpand = document.getElementById('btn-bubble-expand');
 const btnBubbleClose = document.getElementById('btn-bubble-close');
 
@@ -298,8 +313,11 @@ function startVrmLoop() {
 
 // 1C. Avatar Switcher (Live2D & 3D VRM)
 async function switchAvatar(targetId) {
+  if (AVATARS.length === 0 || !AVATARS.some(a => a.id === targetId)) {
+    await loadAvatarsCatalog();
+  }
   const q = (targetId || '').toLowerCase().trim();
-  const av = AVATARS.find(a => a.id === q || a.name.toLowerCase().includes(q)) || AVATARS[0];
+  const av = AVATARS.find(a => a.id === q || a.name.toLowerCase().includes(q) || (a.id && a.id.includes(q))) || AVATARS[0];
   currentAvatarIndex = AVATARS.indexOf(av);
   localStorage.setItem('preferred_avatar', av.id);
 
@@ -316,6 +334,13 @@ async function switchAvatar(targetId) {
   }
 
   showSpeechBubble(`Model visual berhasil beralih ke <strong>${av.name}</strong> (${av.type.toUpperCase()})!`, 'senyum_lembut');
+}
+
+async function cycleNextAvatar() {
+  await loadAvatarsCatalog();
+  if (AVATARS.length === 0) return;
+  currentAvatarIndex = (currentAvatarIndex + 1) % AVATARS.length;
+  await switchAvatar(AVATARS[currentAvatarIndex].id);
 }
 
 // 2. Simulated Lip-Sync
@@ -593,7 +618,8 @@ async function loadAndShowResumeSessions(filterText = '') {
   slashAutocomplete.classList.remove('hidden');
 }
 
-function loadAndShowAvatarChoices(filterText = '') {
+async function loadAndShowAvatarChoices(filterText = '') {
+  await loadAvatarsCatalog();
   const choices = AVATARS.map(a => ({
     cmd: `/avatar ${a.id}`,
     id: a.id,
@@ -715,6 +741,15 @@ function chooseAutocompleteCommand(item) {
     }
     slashAutocomplete.classList.add('hidden');
     sessionInput.focus();
+    return;
+  }
+
+  // If choosing an avatar from /avatar submenu
+  if (item.cmd && item.cmd.startsWith('/avatar ') && item.id) {
+    sessionInput.value = item.cmd + ' ';
+    slashAutocomplete.classList.add('hidden');
+    sessionInput.focus();
+    switchAvatar(item.id);
     return;
   }
 
@@ -922,11 +957,19 @@ function setupUIControls() {
     toggleWideMode();
   });
 
-  // Toggle Avatar (Live2D Haru / Shizuku / 3D VRM Seed-san)
+  // Toggle Avatar from Panel Header (Haru / Shizuku / Tingyun / Seed-san)
   if (btnToggleAvatar) {
-    btnToggleAvatar.addEventListener('click', () => {
-      currentAvatarIndex = (currentAvatarIndex + 1) % AVATARS.length;
-      switchAvatar(AVATARS[currentAvatarIndex].id);
+    btnToggleAvatar.addEventListener('click', (e) => {
+      e.stopPropagation();
+      cycleNextAvatar();
+    });
+  }
+
+  // Toggle Avatar from Floating Speech Bubble
+  if (btnBubbleAvatar) {
+    btnBubbleAvatar.addEventListener('click', (e) => {
+      e.stopPropagation();
+      cycleNextAvatar();
     });
   }
 
@@ -1068,7 +1111,8 @@ function setupUIControls() {
 }
 
 // Bootstrap Application
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
+  await loadAvatarsCatalog();
   initPixi();
   setupUIControls();
   initSession();

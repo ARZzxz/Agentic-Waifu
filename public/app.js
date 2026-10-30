@@ -5,6 +5,7 @@ let isSpeaking = false;
 let mouthAnimationId = null;
 let chatHistory = [];
 let defaultModelPath = 'models/haru/haru_greeter_t03.model3.json';
+let availableAvatars = [];
 
 // DOM Elements
 const canvas = document.getElementById('live2d-canvas');
@@ -119,17 +120,47 @@ async function loadLive2DModel(modelPath) {
     });
 
     currentModel = model;
+    defaultModelPath = modelPath;
     app.stage.addChild(model);
 
     positionModel(model);
     setupModelInteractivity(model);
 
     characterStatus.textContent = 'AI Assistant • Ready';
-    console.log('Model Live2D berhasil dimuat!');
+    console.log('Model Live2D berhasil dimuat:', modelPath);
   } catch (err) {
     console.error('Gagal memuat model Live2D:', err);
     characterStatus.textContent = 'Gagal memuat aset model';
     showBubble('Maaf, model avatar belum dapat dimuat dengan benar. Silakan cek console browser.', 'khawatir');
+  }
+}
+
+// 2B. Load Dynamic Avatars from Backend
+async function loadAvatarsList() {
+  try {
+    const res = await fetch('/api/avatars');
+    if (!res.ok) return;
+    const avatars = await res.json();
+    availableAvatars = avatars;
+
+    if (selectLive2D) {
+      selectLive2D.innerHTML = '';
+      avatars.forEach(av => {
+        const opt = document.createElement('option');
+        opt.value = av.path;
+        opt.dataset.id = av.id;
+        opt.dataset.type = av.type;
+        opt.textContent = `${av.name} (${av.type.toUpperCase()})`;
+        selectLive2D.appendChild(opt);
+      });
+
+      const saved = localStorage.getItem('preferred_avatar_path');
+      if (saved && avatars.some(a => a.path === saved)) {
+        selectLive2D.value = saved;
+      }
+    }
+  } catch(e) {
+    console.error('Gagal memuat daftar avatar di browser:', e);
   }
 }
 
@@ -412,13 +443,27 @@ function setupEventListeners() {
   });
 
   // Settings modal
-  btnSettings.addEventListener('click', () => {
+  btnSettings.addEventListener('click', async () => {
+    await loadAvatarsList();
     settingsModal.classList.add('active');
   });
 
   const closeModal = () => settingsModal.classList.remove('active');
   btnCloseModal.addEventListener('click', closeModal);
   btnCancelSettings.addEventListener('click', closeModal);
+
+  // Switch model on selection change
+  if (selectLive2D) {
+    selectLive2D.addEventListener('change', async () => {
+      const selectedPath = selectLive2D.value;
+      if (!selectedPath) return;
+      localStorage.setItem('preferred_avatar_path', selectedPath);
+      await loadLive2DModel(selectedPath);
+      const av = availableAvatars.find(a => a.path === selectedPath);
+      const name = av ? av.name : 'Model';
+      showBubble(`Model avatar beralih ke <strong>${name}</strong>!`, 'senyum_lembut');
+    });
+  }
 
   // Toggle API key visibility
   btnToggleKeyVisibility.addEventListener('click', () => {
@@ -459,8 +504,13 @@ function setupEventListeners() {
 }
 
 // Bootstrap Application
-window.addEventListener('DOMContentLoaded', () => {
-  initPixi();
+window.addEventListener('DOMContentLoaded', async () => {
+  await loadAvatarsList();
+  const savedPath = localStorage.getItem('preferred_avatar_path');
+  if (savedPath && availableAvatars.some(a => a.path === savedPath)) {
+    defaultModelPath = savedPath;
+  }
+  await initPixi();
   setupEventListeners();
   checkApiStatus();
 });

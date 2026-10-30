@@ -462,17 +462,23 @@ function handleSlashCommand(input) {
   // /avatar [name]
   if (lower.startsWith('/avatar')) {
     const arg = trimmed.slice(7).trim().toLowerCase();
+    const available = scanAvailableAvatars();
     if (!arg || arg === 'list') {
+      const listText = available.map(a => `• <code>/avatar ${a.id}</code> - ${a.name}`).join('\n');
       return {
         type: 'static',
-        reply: `Ara ara~ Berikut avatar visual yang siap digunakan:\n• <code>/avatar haru</code> - Akeno (Live2D Cubism 4)\n• <code>/avatar shizuku</code> - Shizuku (Live2D Cubism 2)\n• <code>/avatar seed-san</code> - Seed-san (3D VRM 1.0 Anime)\n\nKamu juga bisa memasang model .vrm atau Live2D baru ke folder <code>public/models/</code>!`,
+        reply: `Ara ara~ Berikut avatar visual yang siap digunakan:\n${listText}\n\nKamu juga bisa meletakkan folder model Live2D atau .vrm baru di folder <code>public/models/</code>!`,
         emotion: 'senyum_lembut'
       };
     }
+    const match = available.find(a => a.id === arg || a.name.toLowerCase().includes(arg) || (a.id && a.id.includes(arg)));
+    const targetId = match ? match.id : arg;
+    const targetName = match ? match.name : arg;
+
     return {
       type: 'avatar_switch',
-      target: arg,
-      reply: `Ara ara~ Beralih ke avatar <strong>${arg}</strong>! Tampilan model visual sedang diperbarui sayang~`,
+      target: targetId,
+      reply: `Ara ara~ Beralih ke avatar <strong>${targetName}</strong>! Tampilan model visual sedang diperbarui sayang~`,
       emotion: 'senang'
     };
   }
@@ -680,28 +686,106 @@ app.get('/api/sessions', (req, res) => {
   res.json(list);
 });
 
+// Scan public/models for Live2D (Cubism 2/3/4) and 3D VRM models dynamically
+function scanAvailableAvatars() {
+  const avatars = [];
+  const modelsDir = path.join(__dirname, 'public', 'models');
+
+  if (!fs.existsSync(modelsDir)) return avatars;
+
+  try {
+    const entries = fs.readdirSync(modelsDir, { withFileTypes: true });
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const dirName = entry.name;
+      const subDir = path.join(modelsDir, dirName);
+
+      if (dirName.toLowerCase() === 'vrm') {
+        try {
+          const vrmFiles = fs.readdirSync(subDir).filter(f => f.toLowerCase().endsWith('.vrm'));
+          for (const f of vrmFiles) {
+            const baseName = path.parse(f).name;
+            const id = baseName.toLowerCase().replace(/\s+/g, '-');
+            let displayName = id === 'seed-san' ? 'Seed-san (3D VRM)' : `${baseName} (3D VRM)`;
+            avatars.push({
+              id: id,
+              name: displayName,
+              type: 'vrm',
+              path: `models/vrm/${f}`
+            });
+          }
+        } catch(e) {}
+        continue;
+      }
+
+      try {
+        const files = fs.readdirSync(subDir);
+
+        // Check for .model3.json (Live2D Cubism 3/4)
+        const model3File = files.find(f => f.toLowerCase().endsWith('.model3.json'));
+        if (model3File) {
+          let displayName = dirName.charAt(0).toUpperCase() + dirName.slice(1);
+          if (dirName.toLowerCase() === 'haru') displayName = 'Akeno (Haru Live2D)';
+          else if (dirName.toLowerCase() === 'tingyun') displayName = 'Tingyun (Live2D)';
+          else displayName = `${displayName} (Live2D)`;
+
+          avatars.push({
+            id: dirName.toLowerCase(),
+            name: displayName,
+            type: 'live2d',
+            path: `models/${dirName}/${model3File}`
+          });
+          continue;
+        }
+
+        // Check for .model.json (Live2D Cubism 2)
+        const model2File = files.find(f => f.toLowerCase().endsWith('.model.json'));
+        if (model2File) {
+          let displayName = dirName.charAt(0).toUpperCase() + dirName.slice(1);
+          if (dirName.toLowerCase() === 'shizuku') displayName = 'Shizuku (Live2D)';
+          else displayName = `${displayName} (Live2D)`;
+
+          avatars.push({
+            id: dirName.toLowerCase(),
+            name: displayName,
+            type: 'live2d',
+            path: `models/${dirName}/${model2File}`
+          });
+          continue;
+        }
+
+        // Check for .vrm inside model folder
+        const vrmFile = files.find(f => f.toLowerCase().endsWith('.vrm'));
+        if (vrmFile) {
+          const baseName = path.parse(vrmFile).name;
+          avatars.push({
+            id: dirName.toLowerCase(),
+            name: `${baseName} (3D VRM)`,
+            type: 'vrm',
+            path: `models/${dirName}/${vrmFile}`
+          });
+          continue;
+        }
+      } catch(e) {}
+    }
+  } catch (e) {
+    console.error('Error scanning models directory:', e);
+  }
+
+  // Ensure Haru / Akeno is default / first
+  const haruIdx = avatars.findIndex(a => a.id === 'haru');
+  if (haruIdx > 0) {
+    const haru = avatars.splice(haruIdx, 1)[0];
+    avatars.unshift(haru);
+  }
+
+  return avatars;
+}
+
 // Avatars Catalog API
 app.get('/api/avatars', (req, res) => {
-  const avatars = [
-    { id: 'haru', name: 'Akeno (Live2D Cubism 4)', type: 'live2d', path: 'models/haru/haru_greeter_t03.model3.json' },
-    { id: 'shizuku', name: 'Shizuku (Live2D Cubism 2)', type: 'live2d', path: 'models/shizuku/shizuku.model.json' },
-    { id: 'seed-san', name: 'Seed-san (3D VRM 1.0)', type: 'vrm', path: 'models/vrm/seed-san.vrm' }
-  ];
-  const vrmDir = path.join(__dirname, 'public', 'models', 'vrm');
-  if (fs.existsSync(vrmDir)) {
-    try {
-      const files = fs.readdirSync(vrmDir).filter(f => f.endsWith('.vrm') && f.toLowerCase() !== 'seed-san.vrm');
-      files.forEach(f => {
-        const id = path.parse(f).name.toLowerCase();
-        avatars.push({
-          id: id,
-          name: `${path.parse(f).name} (3D VRM)`,
-          type: 'vrm',
-          path: `models/vrm/${f}`
-        });
-      });
-    } catch (e) {}
-  }
+  const avatars = scanAvailableAvatars();
   res.json(avatars);
 });
 

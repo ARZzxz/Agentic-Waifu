@@ -137,18 +137,18 @@
         </div>
 
         <div class="form-group">
-          <label for="select-live2d">Pilihan Model Live2D:</label>
+          <label for="select-live2d">Pilihan Model Avatar:</label>
           <select id="select-live2d">
-            <option value="models/haru/haru_greeter_t03.model3.json">Default (Haru - Live2D Cubism 4)</option>
-            <option value="custom">Model Kustom Sendiri (Letakkan di public/models/)</option>
+            <option value="models/haru/haru_greeter_t03.model3.json">Memuat daftar model...</option>
           </select>
+          <small><i class="fa-solid fa-wand-magic-sparkles" style="color: #a855f7;"></i> Model terdeteksi otomatis dari folder <code>public/models/</code>.</small>
         </div>
 
         <div class="info-callout">
-          <h4><i class="fa-solid fa-folder-open"></i> Ingin Menggunakan Model Kustom?</h4>
-          <p>Buat folder baru di:</p>
-          <code>/home/user/live2d-gemini-assistant/public/models/nama_folder/</code>
-          <p>Lalu letakkan file <code>.moc3</code>, asset tekstur, dan <code>.model3.json</code> di dalam folder tersebut.</p>
+          <h4><i class="fa-solid fa-folder-open"></i> Menambahkan Model Baru?</h4>
+          <p>Cukup buat folder baru di:</p>
+          <code>/home/user/live2d-gemini-assistant/public/models/nama_model/</code>
+          <p>Letakkan file <code>.model3.json</code> atau <code>.model.json</code>, model akan otomatis terdeteksi di dropdown!</p>
         </div>
       </div>
       <div class="modal-footer">
