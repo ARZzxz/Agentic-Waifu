@@ -145,6 +145,9 @@ async function loadLive2DModel(modelPath) {
   const width = 260;
 
   try {
+    // Ensure PIXI Ticker is registered so Cubism 2 & Cubism 3/4 update tickers are active
+    PIXI.live2d.Live2DModel.registerTicker(PIXI.Ticker);
+
     const model = await PIXI.live2d.Live2DModel.from(modelPath, {
       autoInteract: true
     });
